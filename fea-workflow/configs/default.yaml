@@ -28,3 +28,20 @@ outputs:
   fields: [ux, uy, uz, von_mises, sigma_zz]
   reactions: true
   symmetry_check: true
+
+pinn:
+  training:
+    epochs_adam: 500
+    epochs_lbfgs: 100
+    learning_rate: 1e-3
+  weights:
+    pde: 1.0
+    bc: 100.0
+    load: 100.0
+    interface: 100.0
+  sampling:
+    n_interior: 2000
+    n_boundary: 500
+  layers:
+    hidden_depth: 6
+    hidden_width: 64
