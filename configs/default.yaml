@@ -1,0 +1,43 @@
+domain:
+  Lx: 1.0
+  Ly: 1.0
+  H: 0.1
+
+load_patch:
+  x_start: 0.33
+  x_end: 0.67
+  y_start: 0.33
+  y_end: 0.67
+  pressure: 1.0
+
+material:
+  E: 1.0
+  nu: 0.3
+
+model:
+  in_dim: 3
+  out_dim: 3
+  hidden_layers: [128, 128, 128, 128, 128, 128]
+  use_fourier: false
+  fourier_frequencies: 8
+
+loss_weights:
+  interior: 1.0
+  dirichlet: 20.0
+  load: 10.0
+  free: 5.0
+
+schedule:
+  adam_steps: 5000
+  adam_lr: 0.001
+  lbfgs: false
+
+sampling:
+  interior: 4096
+  dirichlet_per_side: 512
+  load_patch: 512
+  free_top: 512
+
+device: cpu
+log_every: 100
+output_dir: outputs
