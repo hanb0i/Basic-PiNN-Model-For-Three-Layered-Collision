@@ -1,0 +1,30 @@
+geometry:
+  Lx: 1.0
+  Ly: 1.0
+  H: 0.1
+
+load_patch:
+  x_start: 0.33
+  x_end: 0.67
+  y_start: 0.33
+  y_end: 0.67
+  pressure: 1.0
+
+material:
+  E: 1.0
+  nu: 0.3
+
+mesh:
+  elements_through_thickness: 6
+  refinement_near_patch: true
+  element_type: hex
+
+solver:
+  type: static_linear
+  use_direct: true
+  tolerance: 1e-8
+
+outputs:
+  fields: [ux, uy, uz, von_mises, sigma_zz]
+  reactions: true
+  symmetry_check: true
