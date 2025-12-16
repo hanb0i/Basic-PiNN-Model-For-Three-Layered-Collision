@@ -89,6 +89,7 @@ def train():
     torch.save(pinn.state_dict(), "pinn_model.pth")
     np.save("loss_history.npy", np.array(loss_history))
     print("Model saved.")
+    return pinn
 
 if __name__ == "__main__":
     train()
