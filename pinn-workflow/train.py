@@ -53,7 +53,7 @@ def train():
     # L-BFGS Training
     print("Starting L-BFGS Training...")
     optimizer_lbfgs = optim.LBFGS(pinn.parameters(), 
-                                  max_iter=20, 
+                                  max_iter=100, 
                                   history_size=50, 
                                   line_search_fn="strong_wolfe")
     
