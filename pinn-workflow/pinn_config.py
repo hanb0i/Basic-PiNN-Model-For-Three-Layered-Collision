@@ -31,13 +31,13 @@ p0 = 0.1 # Load magnitude
 
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
-EPOCHS_ADAM = 500
-EPOCHS_LBFGS = 100
+EPOCHS_ADAM = 2000 # Increased from 500
+EPOCHS_LBFGS = 500 # Increased from 100
 WEIGHTS = {
-    'pde': 1.0,
-    'bc': 100.0,  # Clamped and Free
-    'load': 100.0, # Loaded patch
-    'interface_u': 100.0 # Displacement continuity
+    'pde': 10.0,    # Increased from 1.0
+    'bc': 1.0,      # Reduced, as hard constraint handles side BCs now
+    'load': 1000.0, # Heavily increased from 100.0 to drive deformation
+    'interface_u': 100.0 
 }
 # Sampling
 N_INTERIOR = 2000 # Per layer

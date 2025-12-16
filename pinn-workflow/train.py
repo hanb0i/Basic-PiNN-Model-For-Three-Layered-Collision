@@ -5,7 +5,7 @@ import numpy as np
 import time
 import os
 
-import config
+import pinn_config as config
 import data
 import model
 import physics

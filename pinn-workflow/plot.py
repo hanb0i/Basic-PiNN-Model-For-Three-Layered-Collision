@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-import config
+import pinn_config as config
 import model
 
 def plot_results():

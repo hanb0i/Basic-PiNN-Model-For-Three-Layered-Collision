@@ -1,7 +1,7 @@
 
 import torch
 import torch.autograd as autograd
-import config
+import pinn_config as config
 
 def gradient(u, x):
     # u: (N, 3), x: (N, 3)

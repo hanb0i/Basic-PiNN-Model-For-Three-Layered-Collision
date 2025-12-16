@@ -11,7 +11,7 @@ sys.path.append(root_dir)
 sys.path.append(os.path.join(root_dir, 'pinn-workflow'))
 
 # Import from pinn-workflow
-import config as pinn_config # Now this works directly
+import pinn_config # Now this works directly
 import train as pinn_train
 
 # Import from fea-workflow

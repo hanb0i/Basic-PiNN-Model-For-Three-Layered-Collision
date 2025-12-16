@@ -1,7 +1,7 @@
 
 import torch
 import numpy as np
-import config
+import pinn_config as config
 
 def sample_domain(n, z_min, z_max):
     # Uniform sampling
