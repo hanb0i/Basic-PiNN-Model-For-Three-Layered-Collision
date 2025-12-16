@@ -2,6 +2,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), 'pinn-workflow'))
 import config
 import model
 from scipy.interpolate import RegularGridInterpolator
@@ -22,12 +25,25 @@ def compare():
     print(f"FEA Grid: {len(x_axis)}x{len(y_axis)}x{len(z_axis)}")
     
     # 1. Generate PINN Predictions on same Grid
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
     pinn = model.MultiLayerPINN().to(device)
+    model_path = "pinn_model.pth"
+    if not os.path.exists(model_path):
+        # Check in pinn-workflow directory
+        potential_path = os.path.join(os.path.dirname(__file__), 'pinn-workflow', 'pinn_model.pth')
+        if os.path.exists(potential_path):
+            model_path = potential_path
+
     try:
-        pinn.load_state_dict(torch.load("pinn_model.pth"))
-    except:
-        print("PINN model not found.")
+        pinn.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        print(f"Loaded PINN model from {model_path}")
+    except Exception as e:
+        print(f"PINN model not found or error loading: {e}")
         return
         
     pinn.eval()

@@ -32,7 +32,7 @@ p0 = 0.1 # Load magnitude
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
 EPOCHS_ADAM = 500
-EPOCHS_LBFGS = 500
+EPOCHS_LBFGS = 100
 WEIGHTS = {
     'pde': 1.0,
     'bc': 100.0,  # Clamped and Free

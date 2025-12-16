@@ -1,0 +1,19 @@
+[project]
+name = "basic-pinn-model"
+version = "0.1.0"
+description = "Basic PiNN Model for Three Layered Collision"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "torch",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
