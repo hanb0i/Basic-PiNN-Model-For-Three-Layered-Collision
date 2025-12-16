@@ -3,6 +3,33 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+def plot_loss_history(loss_history, adam_epochs=None, save_path="."):
+    plt.figure(figsize=(10, 6))
+    plt.semilogy(loss_history, label='Total Loss')
+    if adam_epochs is not None and adam_epochs < len(loss_history):
+        plt.axvline(x=adam_epochs, color='r', linestyle='--', label='L-BFGS Start')
+        plt.legend()
+    plt.title("Training Loss vs Epochs")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss (Log Scale)")
+    plt.grid(True, which="both", ls="-", alpha=0.5)
+    plt.savefig(f"{save_path}/loss_history_plot.png")
+    plt.close()
+    print(f"Saved loss_history_plot.png to {save_path}")
+
+    # Separate L-BFGS Plot
+    if adam_epochs is not None and adam_epochs < len(loss_history):
+        plt.figure(figsize=(10, 6))
+        lbfgs_hist = loss_history[adam_epochs:]
+        plt.plot(lbfgs_hist, 'b-o', markersize=3)
+        plt.title("L-BFGS Training Loss Phase")
+        plt.xlabel("L-BFGS Steps (x20 iterations)")
+        plt.ylabel("Loss")
+        plt.grid(True, which="both", ls="-", alpha=0.5)
+        plt.savefig(f"{save_path}/lbfgs_loss_plot.png")
+        plt.close()
+        print(f"Saved lbfgs_loss_plot.png to {save_path}")
+
 def plot_pinn_results(model, config, device, save_path="."):
     model.eval()
     Lx, Ly, H = config['geometry']['Lx'], config['geometry']['Ly'], config['geometry']['H']

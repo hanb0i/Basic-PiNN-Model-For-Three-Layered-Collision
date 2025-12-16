@@ -18,7 +18,7 @@ import train as pinn_train
 # Need to add fea-workflow to path or rel import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from solver.fem_solver import solve_fem
-from postprocessing.visualization import plot_pinn_results, plot_comparison
+from postprocessing.visualization import plot_pinn_results, plot_comparison, plot_loss_history
 
 def get_cfg_from_pinn_config():
     """Convert pinn-workflow config module variables to the dictionary required by FEM solver"""
@@ -45,6 +45,13 @@ def main():
     # Call the external training script
     # This will use pinn-workflow/config.py (100 EPOCHS LBFGS)
     pinn_model = pinn_train.train()
+    
+    # Plot Loss History
+    try:
+        loss_hist = np.load("loss_history.npy")
+        plot_loss_history(loss_hist, adam_epochs=pinn_config.EPOCHS_ADAM, save_path=os.path.dirname(__file__))
+    except FileNotFoundError:
+        print("Could not find loss_history.npy to plot.")
     
     print("\n=== Phase 2: Running FEA Benchmark ===")
     cfg = get_cfg_from_pinn_config()

@@ -31,8 +31,8 @@ p0 = 0.1 # Load magnitude
 
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
-EPOCHS_ADAM = 2000 # Increased from 500
-EPOCHS_LBFGS = 500 # Increased from 100
+EPOCHS_ADAM = 500 # Optimal balance (Knee point at ~200-500)
+EPOCHS_LBFGS = 1000 # Increased from 500
 WEIGHTS = {
     'pde': 10.0,    # Increased from 1.0
     'bc': 1.0,      # Reduced, as hard constraint handles side BCs now
