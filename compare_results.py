@@ -5,7 +5,7 @@ import torch
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), 'pinn-workflow'))
-import config
+import pinn_config as config
 import model
 from scipy.interpolate import RegularGridInterpolator
 
