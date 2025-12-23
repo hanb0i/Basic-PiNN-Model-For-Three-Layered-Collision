@@ -22,8 +22,7 @@ class FourierFeatures(nn.Module):
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 class LayerNet(nn.Module):
-    def __init__(self, hidden_layers=6, hidden_units=64, activation=nn.Tanh(), 
-                 fourier_dim=0, fourier_scale=1.0):
+    def __init__(self, hidden_layers=3, hidden_units=32, activation=nn.Tanh()):
         super().__init__()
         layers = []
         # Input: x, y, z (3 coords)
