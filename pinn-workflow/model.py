@@ -1,17 +1,42 @@
-
 import torch
 import torch.nn as nn
+import numpy as np
+import pinn_config as config
+
+class FourierFeatures(nn.Module):
+    def __init__(self, input_dim, mapping_size, scale):
+        super().__init__()
+        self.B = nn.Parameter(torch.randn(input_dim, mapping_size) * scale, requires_grad=False)
+
+    def forward(self, x):
+        # x: (N, 3)
+        # Normalize z coordinate from [0, 0.1] to roughly [0, 1] relative to x,y
+        # Ideally we read this from config, but here we can just scale based on assumed H=0.1
+        # Better yet, let's just multiply z by 10.0 to match x,y range
+        # Or more robustly: 
+        x_norm = x.clone()
+        x_norm[:, 2] = x_norm[:, 2] * 10.0 # Scale z to [0, 1]
+        
+        # x_proj: (N, mapping_size)
+        x_proj = (2. * np.pi * x_norm) @ self.B
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 class LayerNet(nn.Module):
-    def __init__(self, hidden_layers=6, hidden_units=64, activation=nn.Tanh()):
+    def __init__(self, hidden_layers=6, hidden_units=64, activation=nn.Tanh(), 
+                 fourier_dim=0, fourier_scale=1.0):
         super().__init__()
         layers = []
         # Input: x, y, z (3 coords)
         input_dim = 3
         
-        # Optional: Fourier features could be added here
+        if fourier_dim > 0:
+            layers.append(FourierFeatures(input_dim, fourier_dim, fourier_scale))
+            # FourierFeatures output is 2 * fourier_dim
+            current_dim = 2 * fourier_dim
+        else:
+            current_dim = input_dim
         
-        layers.append(nn.Linear(input_dim, hidden_units))
+        layers.append(nn.Linear(current_dim, hidden_units))
         layers.append(activation)
         
         for _ in range(hidden_layers - 1):
@@ -53,9 +78,10 @@ class MultiLayerPINN(nn.Module):
     def __init__(self):
         super().__init__()
         # 3 Separate networks for 3 layers
-        self.layer1 = LayerNet()
-        self.layer2 = LayerNet()
-        self.layer3 = LayerNet()
+        # Use parameters from config
+        self.layer1 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
+        self.layer2 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
+        self.layer3 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
         
     def forward(self, x, layer_idx):
         if layer_idx == 0:
