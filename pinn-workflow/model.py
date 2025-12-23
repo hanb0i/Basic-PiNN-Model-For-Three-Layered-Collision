@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 class LayerNet(nn.Module):
-    def __init__(self, hidden_layers=6, hidden_units=64, activation=nn.Tanh()):
+    def __init__(self, hidden_layers=3, hidden_units=32, activation=nn.Tanh()):
         super().__init__()
         layers = []
         # Input: x, y, z (3 coords)
