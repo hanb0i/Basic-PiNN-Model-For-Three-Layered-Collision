@@ -32,7 +32,7 @@ p0 = 0.1 # Load magnitude
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
 EPOCHS_ADAM = 500 # Optimal balance (Knee point at ~200-500)
-EPOCHS_LBFGS = 1000 # Increased from 500. Resampling here. Should help convergence. 
+EPOCHS_LBFGS = 2000 # Increased from 500. Resampling here. Should help convergence. 
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
     'pde': 10.0,    # Increased from 1.0
@@ -45,5 +45,5 @@ N_INTERIOR = 2000 # Per layer
 N_BOUNDARY = 500  # Per face type
 
 # Fourier Features
-FOURIER_DIM = 64 # Number of Fourier frequencies
+FOURIER_DIM = 32 # Number of Fourier frequencies
 FOURIER_SCALE = 1.0 # Standard deviation for frequency sampling
