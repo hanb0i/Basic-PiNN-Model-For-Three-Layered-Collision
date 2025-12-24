@@ -30,20 +30,20 @@ Lame_Params = [get_lame_params(e, n) for e, n in zip(E_vals, nu_vals)]
 p0 = 0.1 # Load magnitude
 
 # --- Training Hyperparameters ---
-LEARNING_RATE = 1e-3
-EPOCHS_ADAM = 500 # Optimal balance (Knee point at ~200-500)
-EPOCHS_LBFGS = 2000 # Increased from 500. Resampling here. Should help convergence. 
+LEARNING_RATE = 5e-4
+EPOCHS_ADAM = 2000 # Longer Adam phase for better field fit
+EPOCHS_LBFGS = 2000 # Longer LBFGS phase for convergence
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
-    'pde': 10.0,    # Increased from 1.0
+    'pde': 30.0,    # Stronger PDE to avoid trivial displacement field
     'bc': 1.0,      # Reduced, as hard constraint handles side BCs now
-    'load': 1000.0, # Heavily increased from 100.0 to drive deformation
-    'interface_u': 100.0 
+    'load': 300.0,  # Reduce dominance of traction-only solution
+    'interface_u': 300.0 
 }
 # Sampling
-N_INTERIOR = 2000 # Per layer
-N_BOUNDARY = 500  # Per face type
+N_INTERIOR = 6000 # Per layer
+N_BOUNDARY = 1500  # Per face type
 
 # Fourier Features
-FOURIER_DIM = 32 # Number of Fourier frequencies
-FOURIER_SCALE = 1.0 # Standard deviation for frequency sampling
+FOURIER_DIM = 64 # Number of Fourier frequencies
+FOURIER_SCALE = 2.0 # Standard deviation for frequency sampling
