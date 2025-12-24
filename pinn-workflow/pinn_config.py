@@ -45,5 +45,5 @@ N_INTERIOR = 2000 # Per layer
 N_BOUNDARY = 500  # Per face type
 
 # Fourier Features
-FOURIER_DIM = 32 # Number of Fourier frequencies
+FOURIER_DIM = 64 # Number of Fourier frequencies
 FOURIER_SCALE = 1.0 # Standard deviation for frequency sampling
