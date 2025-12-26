@@ -22,7 +22,7 @@ class FourierFeatures(nn.Module):
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 class LayerNet(nn.Module):
-    def __init__(self, hidden_layers=3, hidden_units=32, activation=nn.Tanh(), 
+    def __init__(self, hidden_layers=3, hidden_units=32, activation=nn.Tanh(),
                  fourier_dim=0, fourier_scale=1.0):
         super().__init__()
         layers = []
@@ -79,9 +79,18 @@ class MultiLayerPINN(nn.Module):
         super().__init__()
         # 3 Separate networks for 3 layers
         # Use parameters from config
-        self.layer1 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
-        self.layer2 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
-        self.layer3 = LayerNet(fourier_dim=config.FOURIER_DIM, fourier_scale=config.FOURIER_SCALE)
+        self.layer1 = LayerNet(hidden_layers=config.HIDDEN_LAYERS,
+                               hidden_units=config.HIDDEN_UNITS,
+                               fourier_dim=config.FOURIER_DIM,
+                               fourier_scale=config.FOURIER_SCALE)
+        self.layer2 = LayerNet(hidden_layers=config.HIDDEN_LAYERS,
+                               hidden_units=config.HIDDEN_UNITS,
+                               fourier_dim=config.FOURIER_DIM,
+                               fourier_scale=config.FOURIER_SCALE)
+        self.layer3 = LayerNet(hidden_layers=config.HIDDEN_LAYERS,
+                               hidden_units=config.HIDDEN_UNITS,
+                               fourier_dim=config.FOURIER_DIM,
+                               fourier_scale=config.FOURIER_SCALE)
         
     def forward(self, x, layer_idx):
         if layer_idx == 0:
@@ -98,3 +107,8 @@ class MultiLayerPINN(nn.Module):
         # Typically requires knowing which layer x belongs to.
         # For inference, user handles masking.
         pass
+
+def get_model_path():
+    p0_tag = str(config.p0).replace(".", "p")
+    e0_tag = str(config.E_vals[0]).replace(".", "p")
+    return f"pinn_model_p0{p0_tag}_E{e0_tag}.pth"

@@ -16,7 +16,7 @@ Layer_Interfaces = [0.0, H/3, 2*H/3, H]
 # --- Material Properties ---
 # Young's Modulus (E) and Poisson's Ratio (nu)
 # Can be different per layer
-E_vals = [1.0, 1.0, 1.0] # Normalized
+E_vals = [1.0, 1.0, 1.0] # Match FEA material
 nu_vals = [0.3, 0.3, 0.3]
 
 def get_lame_params(E, nu):
@@ -27,23 +27,27 @@ def get_lame_params(E, nu):
 Lame_Params = [get_lame_params(e, n) for e, n in zip(E_vals, nu_vals)]
 
 # --- Loading ---
-p0 = 0.1 # Load magnitude
+p0 = 1.0 # Match FEA load magnitude
 
 # --- Training Hyperparameters ---
-LEARNING_RATE = 5e-4
-EPOCHS_ADAM = 2000 # Longer Adam phase for better field fit
-EPOCHS_LBFGS = 2000 # Longer LBFGS phase for convergence
+LEARNING_RATE = 1e-3
+EPOCHS_ADAM = 500 # Match FEA workflow defaults
+EPOCHS_LBFGS = 100 # Match FEA workflow defaults
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
-    'pde': 30.0,    # Stronger PDE to avoid trivial displacement field
-    'bc': 1.0,      # Reduced, as hard constraint handles side BCs now
-    'load': 300.0,  # Reduce dominance of traction-only solution
-    'interface_u': 300.0 
+    'pde': 0.1,
+    'bc': 100.0,
+    'load': 1000.0,
+    'interface_u': 100.0
 }
 # Sampling
-N_INTERIOR = 6000 # Per layer
-N_BOUNDARY = 1500  # Per face type
+N_INTERIOR = 4000 # Per layer
+N_BOUNDARY = 2000  # Per face type
+
+# Model size
+HIDDEN_LAYERS = 6
+HIDDEN_UNITS = 64
 
 # Fourier Features
-FOURIER_DIM = 64 # Number of Fourier frequencies
+FOURIER_DIM = 0 # Disable Fourier features for smoother fields
 FOURIER_SCALE = 2.0 # Standard deviation for frequency sampling

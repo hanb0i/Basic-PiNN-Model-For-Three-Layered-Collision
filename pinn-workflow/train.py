@@ -86,7 +86,10 @@ def train():
         print(f"L-BFGS Step {i}: Loss: {loss_val.item():.6f} | Time: {step_end - step_start:.4f}s")
             
     # Save Model
+    model_path = model.get_model_path()
+    torch.save(pinn.state_dict(), model_path)
     torch.save(pinn.state_dict(), "pinn_model.pth")
+    print(f"Model saved: {model_path}")
     np.save("loss_history.npy", np.array(loss_history))
     print("Model saved.")
     return pinn
