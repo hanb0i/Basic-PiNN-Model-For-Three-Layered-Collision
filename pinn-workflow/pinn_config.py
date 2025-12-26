@@ -27,7 +27,7 @@ def get_lame_params(E, nu):
 Lame_Params = [get_lame_params(e, n) for e, n in zip(E_vals, nu_vals)]
 
 # --- Loading ---
-p0 = 0.1 # Load magnitude
+p0 = 1.0 # Load magnitude
 
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3

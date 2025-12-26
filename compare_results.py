@@ -97,9 +97,15 @@ def compare():
     abs_diff = np.abs(u_z_fea_top - u_z_pinn_top)
     mae = np.mean(abs_diff)
     max_err = np.max(abs_diff)
+    denom = np.max(np.abs(u_z_fea_top))
+    if denom > 0:
+        mae_pct = (mae / denom) * 100.0
+    else:
+        mae_pct = 0.0
     
     print(f"Comparison Results (Top Surface u_z):")
     print(f"MAE: {mae:.6f}")
+    print(f"MAE % of max |FEA u_z|: {mae_pct:.2f}%")
     print(f"Max Error: {max_err:.6f}")
     print(f"Peak Deflection FEA: {u_z_fea_top.min():.6f}")
     print(f"Peak Deflection PINN: {u_z_pinn_top.min():.6f}")
