@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 import sys
 import os
+from glob import glob
 sys.path.append(os.path.join(os.path.dirname(__file__), 'pinn-workflow'))
 import pinn_config as config
 import model
@@ -32,12 +33,18 @@ def compare():
     else:
         device = torch.device('cpu')
     pinn = model.MultiLayerPINN().to(device)
-    model_path = "pinn_model.pth"
-    if not os.path.exists(model_path):
-        # Check in pinn-workflow directory
-        potential_path = os.path.join(os.path.dirname(__file__), 'pinn-workflow', 'pinn_model.pth')
-        if os.path.exists(potential_path):
-            model_path = potential_path
+    env_model_path = os.environ.get("PINN_MODEL_PATH")
+    if env_model_path:
+        model_path = env_model_path
+    else:
+        candidates = []
+        candidates.extend(glob("*.pth"))
+        candidates.extend(glob(os.path.join(os.path.dirname(__file__), "pinn-workflow", "*.pth")))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            print("Model not found, cannot plot.")
+            return
+        model_path = max(candidates, key=os.path.getmtime)
 
     try:
         pinn.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))

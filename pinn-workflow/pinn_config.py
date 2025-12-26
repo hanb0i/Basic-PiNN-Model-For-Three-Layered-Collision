@@ -32,7 +32,7 @@ p0 = 1.0 # Load magnitude
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
 EPOCHS_ADAM = 500 # Optimal balance (Knee point at ~200-500)
-EPOCHS_LBFGS = 1000 # Increased from 500. Resampling here. Should help convergence. 
+EPOCHS_LBFGS = 2000 # Increased from 500. Resampling here. Should help convergence. 
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
     'pde': 10.0,    # Increased from 1.0
