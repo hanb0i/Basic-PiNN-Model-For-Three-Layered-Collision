@@ -45,6 +45,10 @@ WEIGHTS = {
 N_INTERIOR = 8000 # Increased sampling
 N_BOUNDARY = 2000
 
+# Model size
+HIDDEN_LAYERS = 5
+HIDDEN_UNITS = 128
+
 # Fourier Features
 FOURIER_DIM = 64 
 FOURIER_SCALE = 2.0 
