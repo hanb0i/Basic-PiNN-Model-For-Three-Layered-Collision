@@ -8,7 +8,7 @@ load_patch:
   x_end: 0.67
   y_start: 0.33
   y_end: 0.67
-  pressure: 1.0
+  pressure: 0.1
 
 material:
   E: 1.0
@@ -36,8 +36,8 @@ pinn:
     learning_rate: 1e-3
   weights:
     pde: 1.0
-    bc: 100.0
-    load: 100.0
+    bc: 10.0
+    load: 500.0
     interface: 100.0
   sampling:
     n_interior: 2000

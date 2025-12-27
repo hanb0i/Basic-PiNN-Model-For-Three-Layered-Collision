@@ -157,6 +157,7 @@ def compute_loss(model, data, device):
     # --- 4. Interface Continuity (u matching) ---
     # Layer 1-2
     x_if12 = data['if_12'].to(device)
+    x_if12.requires_grad = True
     u1_if = model(x_if12, 0)
     u2_if = model(x_if12, 1)
     
@@ -164,6 +165,7 @@ def compute_loss(model, data, device):
     
     # Layer 2-3
     x_if23 = data['if_23'].to(device)
+    x_if23.requires_grad = True
     u2_if_23 = model(x_if23, 1)
     u3_if = model(x_if23, 2)
     
@@ -171,6 +173,43 @@ def compute_loss(model, data, device):
     
     losses['interface'] = loss_if12 + loss_if23
     total_loss += config.WEIGHTS['interface_u'] * (loss_if12 + loss_if23)
+
+    # --- 5. Interface Stress Continuity (Force Transmission) ---
+    # We need sigma_z continuity: sigma_xz, sigma_yz, sigma_zz must match
+    # Layer 1-2 Interface
+    # Layer 1 side
+    lm1, mu1 = config.Lame_Params[0]
+    grad_u1_if = gradient(u1_if, x_if12)
+    sig1_if = stress(strain(grad_u1_if), lm1, mu1)
+    # Layer 2 side
+    lm2, mu2 = config.Lame_Params[1]
+    grad_u2_if_12 = gradient(u2_if, x_if12)
+    sig2_if = stress(strain(grad_u2_if_12), lm2, mu2)
+    
+    # Traction vector on z-plane is simply the 3rd column of stress tensor
+    traction1_12 = sig1_if[:, :, 2] # (N, 3)
+    traction2_12 = sig2_if[:, :, 2]
+    
+    loss_stress_12 = torch.mean((traction1_12 - traction2_12)**2)
+    
+    # Layer 2-3 Interface
+    # Layer 2 side
+    # u2_if_23 already computed
+    grad_u2_if_23 = gradient(u2_if_23, x_if23)
+    sig2_if_23 = stress(strain(grad_u2_if_23), lm2, mu2)
+    
+    # Layer 3 side
+    lm3, mu3 = config.Lame_Params[2]
+    grad_u3_if = gradient(u3_if, x_if23)
+    sig3_if_23 = stress(strain(grad_u3_if), lm3, mu3)
+    
+    traction2_23 = sig2_if_23[:, :, 2]
+    traction3_23 = sig3_if_23[:, :, 2]
+    
+    loss_stress_23 = torch.mean((traction2_23 - traction3_23)**2)
+    
+    losses['interface_stress'] = loss_stress_12 + loss_stress_23
+    total_loss += config.WEIGHTS['interface_stress'] * (loss_stress_12 + loss_stress_23)
     
     losses['total'] = total_loss
     return total_loss, losses

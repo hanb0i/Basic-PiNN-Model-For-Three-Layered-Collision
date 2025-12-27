@@ -27,23 +27,25 @@ def get_lame_params(E, nu):
 Lame_Params = [get_lame_params(e, n) for e, n in zip(E_vals, nu_vals)]
 
 # --- Loading ---
-p0 = 0.1 # Load magnitude
+p0 = 0.1 # Load magnitude (Matched to FEA: 0.1)
 
 # --- Training Hyperparameters ---
-LEARNING_RATE = 5e-4
-EPOCHS_ADAM = 2000 # Longer Adam phase for better field fit
-EPOCHS_LBFGS = 2000 # Longer LBFGS phase for convergence
+LEARNING_RATE = 1e-3 # Increased LR for larger load/network
+EPOCHS_ADAM = 1000 # Optimized based on convergence analysis
+EPOCHS_LBFGS = 2000 
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
-    'pde': 30.0,    # Stronger PDE to avoid trivial displacement field
-    'bc': 1.0,      # Reduced, as hard constraint handles side BCs now
-    'load': 300.0,  # Reduce dominance of traction-only solution
-    'interface_u': 300.0 
+    'pde': 1.0,     # Normalized
+    'bc': 10.0,    # Reduced to allow deformation
+    'load': 500.0,   # Boosted to force deformation (vs zero solution)
+    'interface_u': 100.0,
+    'interface_stress': 10.0 
 }
 # Sampling
-N_INTERIOR = 6000 # Per layer
-N_BOUNDARY = 1500  # Per face type
+N_INTERIOR = 8000 # Increased sampling
+N_BOUNDARY = 2000
 
 # Fourier Features
-FOURIER_DIM = 64 # Number of Fourier frequencies
-FOURIER_SCALE = 2.0 # Standard deviation for frequency sampling
+FOURIER_DIM = 64 
+FOURIER_SCALE = 2.0 
+OUTPUT_SCALE = 1.0 # Normalized scale sufficient for p0=0.1 (disp ~0.6)
