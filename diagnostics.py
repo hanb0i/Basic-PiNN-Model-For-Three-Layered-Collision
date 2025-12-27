@@ -130,5 +130,30 @@ def run():
     plt.savefig("traction_top_patch.png")
     print("Saved traction_top_patch.png")
 
+    # Displacement on Top Surface (Full Domain)
+    n_plot_full = 50
+    x_full = np.linspace(0, config.Lx, n_plot_full)
+    y_full = np.linspace(0, config.Ly, n_plot_full)
+    Xf, Yf = np.meshgrid(x_full, y_full)
+    Zf = np.ones_like(Xf) * config.H
+    pts_full = np.stack([Xf.ravel(), Yf.ravel(), Zf.ravel()], axis=1)
+    
+    # Predict uz
+    u_full = _predict_points(pinn, pts_full, device)
+    uz_full = u_full[:, 2].reshape(Xf.shape)
+    
+    print("Top Surface Displacement Stats:")
+    print(f"  Min uz: {uz_full.min():.6f}")
+    print(f"  Max uz: {uz_full.max():.6f}")
+
+    plt.figure(figsize=(7, 5))
+    c2 = plt.contourf(Xf, Yf, uz_full, levels=50, cmap="viridis")
+    plt.colorbar(c2, label="Displacement uz")
+    plt.title("PINN Top Surface Displacement uz")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.savefig("displacement_top_surf.png")
+    print("Saved displacement_top_surf.png")
+
 if __name__ == "__main__":
     run()

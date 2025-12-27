@@ -45,7 +45,11 @@ WEIGHTS = {
 N_INTERIOR = 8000 # Increased sampling
 N_BOUNDARY = 2000
 
+# Model Architecture
+HIDDEN_LAYERS = 5
+HIDDEN_UNITS = 128
+
 # Fourier Features
 FOURIER_DIM = 64 
 FOURIER_SCALE = 2.0 
-OUTPUT_SCALE = 1.0 # Normalized scale sufficient for p0=0.1 (disp ~0.6)
+OUTPUT_SCALE = 10.0 # Restored scaling to enable bending mode capture
