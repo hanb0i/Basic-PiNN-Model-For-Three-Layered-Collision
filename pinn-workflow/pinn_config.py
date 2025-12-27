@@ -27,7 +27,6 @@ def get_lame_params(E, nu):
 Lame_Params = [get_lame_params(e, n) for e, n in zip(E_vals, nu_vals)]
 
 # --- Loading ---
-<<<<<<< HEAD
 p0 = 0.1 # Load magnitude (Matched to FEA: 0.1)
 
 # --- Training Hyperparameters ---
@@ -50,29 +49,3 @@ N_BOUNDARY = 2000
 FOURIER_DIM = 64 
 FOURIER_SCALE = 2.0 
 OUTPUT_SCALE = 1.0 # Normalized scale sufficient for p0=0.1 (disp ~0.6)
-=======
-p0 = 1.0 # Match FEA load magnitude
-
-# --- Training Hyperparameters ---
-LEARNING_RATE = 1e-3
-EPOCHS_ADAM = 500 # Match FEA workflow defaults
-EPOCHS_LBFGS = 100 # Match FEA workflow defaults
-#Plot Physical Residuals Every N Epochs every 100 epochs. 
-WEIGHTS = {
-    'pde': 0.1,
-    'bc': 100.0,
-    'load': 1000.0,
-    'interface_u': 100.0
-}
-# Sampling
-N_INTERIOR = 4000 # Per layer
-N_BOUNDARY = 2000  # Per face type
-
-# Model size
-HIDDEN_LAYERS = 6
-HIDDEN_UNITS = 64
-
-# Fourier Features
-FOURIER_DIM = 0 # Disable Fourier features for smoother fields
-FOURIER_SCALE = 2.0 # Standard deviation for frequency sampling
->>>>>>> 45a9ac0bcd22395799ffb9e1c4bbdc8060943c4d
