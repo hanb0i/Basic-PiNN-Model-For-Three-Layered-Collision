@@ -36,8 +36,8 @@ EPOCHS_LBFGS = 2000
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
     'pde': 1.0,     # Normalized
-    'bc': 10.0,    # Reduced to allow deformation
-    'load': 500.0,   # Boosted to force deformation (vs zero solution)
+    'bc': 1.0,      # Relaxed to allow free surfaces to move
+    'load': 100.0,  # Boosted to force deformation 
     'interface_u': 100.0,
     'interface_stress': 10.0 
 }
@@ -52,4 +52,4 @@ HIDDEN_UNITS = 128
 # Fourier Features
 FOURIER_DIM = 64 
 FOURIER_SCALE = 2.0 
-OUTPUT_SCALE = 10.0 # Restored scaling to enable bending mode capture
+OUTPUT_SCALE = 10.0 # Scaling to enable bending mode capture
