@@ -3,6 +3,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 import pinn_config as config
 import model
 
@@ -10,7 +11,10 @@ def plot_results():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     pinn = model.MultiLayerPINN().to(device)
     try:
-        pinn.load_state_dict(torch.load("pinn_model.pth"))
+        model_path = model.get_model_path()
+        if not os.path.exists(model_path):
+            model_path = "pinn_model.pth"
+        pinn.load_state_dict(torch.load(model_path))
     except FileNotFoundError:
         print("Model not found, cannot plot.")
         return

@@ -14,11 +14,13 @@ import physics
 
 def _load_model(device):
     pinn = model.MultiLayerPINN().to(device)
-    model_path = "pinn_model.pth"
+    model_path = model.get_model_path()
     if not os.path.exists(model_path):
-        potential_path = os.path.join(os.path.dirname(__file__), "pinn-workflow", "pinn_model.pth")
+        potential_path = os.path.join(os.path.dirname(__file__), "pinn-workflow", model.get_model_path())
         if os.path.exists(potential_path):
             model_path = potential_path
+        else:
+            model_path = "pinn_model.pth"
     try:
         pinn.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
         print(f"Loaded PINN model from {model_path}")
