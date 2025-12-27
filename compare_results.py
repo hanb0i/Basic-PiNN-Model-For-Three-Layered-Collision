@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 import sys
 import os
+from glob import glob
 sys.path.append(os.path.join(os.path.dirname(__file__), 'pinn-workflow'))
 import pinn_config as config
 import model
@@ -32,12 +33,18 @@ def compare():
     else:
         device = torch.device('cpu')
     pinn = model.MultiLayerPINN().to(device)
-    model_path = "pinn_model.pth"
-    if not os.path.exists(model_path):
-        # Check in pinn-workflow directory
-        potential_path = os.path.join(os.path.dirname(__file__), 'pinn-workflow', 'pinn_model.pth')
-        if os.path.exists(potential_path):
-            model_path = potential_path
+    env_model_path = os.environ.get("PINN_MODEL_PATH")
+    if env_model_path:
+        model_path = env_model_path
+    else:
+        candidates = []
+        candidates.extend(glob("*.pth"))
+        candidates.extend(glob(os.path.join(os.path.dirname(__file__), "pinn-workflow", "*.pth")))
+        candidates = [p for p in candidates if os.path.isfile(p)]
+        if not candidates:
+            print("Model not found, cannot plot.")
+            return
+        model_path = max(candidates, key=os.path.getmtime)
 
     try:
         pinn.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
@@ -97,9 +104,15 @@ def compare():
     abs_diff = np.abs(u_z_fea_top - u_z_pinn_top)
     mae = np.mean(abs_diff)
     max_err = np.max(abs_diff)
+    denom = np.max(np.abs(u_z_fea_top))
+    if denom > 0:
+        mae_pct = (mae / denom) * 100.0
+    else:
+        mae_pct = 0.0
     
     print(f"Comparison Results (Top Surface u_z):")
     print(f"MAE: {mae:.6f}")
+    print(f"MAE % of max |FEA u_z|: {mae_pct:.2f}%")
     print(f"Max Error: {max_err:.6f}")
     print(f"Peak Deflection FEA: {u_z_fea_top.min():.6f}")
     print(f"Peak Deflection PINN: {u_z_pinn_top.min():.6f}")
