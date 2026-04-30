@@ -1,0 +1,67 @@
+{
+  "seed": 20260430,
+  "n_cases": 50,
+  "mesh": {
+    "ne_x": 16,
+    "ne_y": 16,
+    "ne_z": 8
+  },
+  "one_layer": {
+    "csv": "/Users/jade/PiNNs/Optimizing_Parameterized_Physics-Informed_Neural_Networks_to_Efficiently_Solve_Multilayer_Collision/graphs/generalized_study/one_layer_random_50.csv",
+    "summary": {
+      "model_path": "/Users/jade/PiNNs/Optimizing_Parameterized_Physics-Informed_Neural_Networks_to_Efficiently_Solve_Multilayer_Collision/one-layer-workflow/pinn_model.pth",
+      "seed": 20260430,
+      "n_cases": 50,
+      "mesh": {
+        "ne_x": 16,
+        "ne_y": 16,
+        "ne_z": 8
+      },
+      "top_uz_mae_pct_mean": 2.98722798,
+      "top_uz_mae_pct_std": 1.60011377421339,
+      "top_uz_mae_pct_worst": 7.254656,
+      "top_uz_relative_l2_pct_mean": 13.04594258,
+      "top_uz_relative_l2_pct_std": 6.635389929793281,
+      "top_uz_relative_l2_pct_worst": 31.707477,
+      "volume_mae_pct_mean": 1.5692919000000003,
+      "volume_mae_pct_std": 0.46766008070119686,
+      "volume_mae_pct_worst": 2.739693,
+      "volume_relative_l2_pct_mean": 13.907883540000002,
+      "volume_relative_l2_pct_std": 6.044645585806481,
+      "volume_relative_l2_pct_worst": 31.456427,
+      "avg_displacement_relative_error_pct_mean": 12.90222076,
+      "avg_displacement_relative_error_pct_worst": 33.260542,
+      "all_top_cases_below_5_pct": false,
+      "all_volume_cases_below_5_pct": true
+    }
+  },
+  "three_layer": {
+    "csv": "/Users/jade/PiNNs/Optimizing_Parameterized_Physics-Informed_Neural_Networks_to_Efficiently_Solve_Multilayer_Collision/graphs/generalized_study/three_layer_random_50.csv",
+    "summary": {
+      "model_path": "/Users/jade/PiNNs/Optimizing_Parameterized_Physics-Informed_Neural_Networks_to_Efficiently_Solve_Multilayer_Collision/three-layer-workflow/pinn_model.pth",
+      "seed": 20260430,
+      "n_cases": 50,
+      "mesh": {
+        "ne_x": 16,
+        "ne_y": 16,
+        "ne_z": 8
+      },
+      "top_uz_mae_pct_mean": 12.1068812,
+      "top_uz_mae_pct_std": 1.5368370741721973,
+      "top_uz_mae_pct_worst": 16.520397,
+      "top_uz_relative_l2_pct_mean": 57.2541861,
+      "top_uz_relative_l2_pct_std": 8.177892269596144,
+      "top_uz_relative_l2_pct_worst": 76.399987,
+      "volume_mae_pct_mean": 5.128537580000001,
+      "volume_mae_pct_std": 0.6808124190945724,
+      "volume_mae_pct_worst": 7.173093,
+      "volume_relative_l2_pct_mean": 57.881572379999994,
+      "volume_relative_l2_pct_std": 8.032275338011456,
+      "volume_relative_l2_pct_worst": 77.222417,
+      "avg_displacement_relative_error_pct_mean": 59.3006876,
+      "avg_displacement_relative_error_pct_worst": 76.693533,
+      "all_top_cases_below_5_pct": false,
+      "all_volume_cases_below_5_pct": false
+    }
+  }
+}
