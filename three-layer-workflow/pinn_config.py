@@ -178,11 +178,11 @@ FORCE_SOFT_SIDE_BC_FROM_START = True
 SOFT_MODE_PDE_WEIGHT_SCALE = 3.0
 SOFT_MODE_LOAD_WEIGHT_SCALE = 1.0
 # Sampling
-N_INTERIOR = 15000 # Per layer
-N_SIDES = 2000  # Clamped side faces
-N_TOP_LOAD = 6000  # Load patch (more points to boost displacement)
-N_TOP_FREE = 2000  # Top free surface
-N_BOTTOM = 2000  # Bottom free surface
+N_INTERIOR = _env_int("PINN_N_INTERIOR", 15000) # Per layer
+N_SIDES = _env_int("PINN_N_SIDES", 2000)  # Clamped side faces
+N_TOP_LOAD = _env_int("PINN_N_TOP_LOAD", 6000)  # Load patch (more points to boost displacement)
+N_TOP_FREE = _env_int("PINN_N_TOP_FREE", 2000)  # Top free surface
+N_BOTTOM = _env_int("PINN_N_BOTTOM", 2000)  # Bottom free surface
 N_INTERFACE = _env_int("PINN_N_INTERFACE", 16000)  # Exact points on the layer interface
 UNDER_PATCH_FRACTION = 0.95 # More interior points focus under the load patch
 INTERFACE_SAMPLE_FRACTION = _env_float("PINN_INTERFACE_SAMPLE_FRACTION", 0.75)
