@@ -25,8 +25,8 @@ def _load_rows(path: Path) -> list[dict]:
 
 def main() -> None:
     apply_ieee_style()
-    candidates_path = DATA_DIR / "surrogate_optimization_mean_patch_candidates.csv"
-    confirmation_path = DATA_DIR / "surrogate_optimization_mean_patch_confirmation.csv"
+    candidates_path = DATA_DIR / "surrogate_optimization_balanced_candidates.csv"
+    confirmation_path = DATA_DIR / "surrogate_optimization_balanced_confirmation.csv"
     candidate_rows = _load_rows(candidates_path)
     confirmation_rows = _load_rows(confirmation_path)
 
@@ -40,7 +40,7 @@ def main() -> None:
         plt.tight_layout()
         out_paths = save_figure(fig, "fig_surrogate_optimization_process")
     else:
-        candidate_scores = np.array([float(row["mean_patch_abs"]) for row in candidate_rows], dtype=float)
+        candidate_scores = np.array([float(row["balanced_score"]) for row in candidate_rows], dtype=float)
         candidate_scores.sort()
         ranks = np.arange(1, len(candidate_scores) + 1)
         top_k = len(confirmation_rows)
@@ -55,13 +55,13 @@ def main() -> None:
             label=f"Top {top_k}",
         )
         ax0.set_xlabel("Screened candidate rank")
-        ax0.set_ylabel("Mean load-patch |$u_z$|")
+        ax0.set_ylabel("Balanced score")
         ax0.set_title("1. PINN Screening")
         ax0.legend(frameon=False, loc="upper left")
 
         top_ranks = np.array([int(row["rank"]) for row in confirmation_rows], dtype=int)
-        pinn_obj = np.array([float(row["pinn_mean_patch_abs"]) for row in confirmation_rows], dtype=float)
-        fem_obj = np.array([float(row["fem_mean_patch_abs"]) for row in confirmation_rows], dtype=float)
+        pinn_obj = np.array([float(row["pinn_peak_downward_abs"]) for row in confirmation_rows], dtype=float)
+        fem_obj = np.array([float(row["fem_peak_downward_abs"]) for row in confirmation_rows], dtype=float)
         x = np.arange(len(top_ranks))
         width = 0.36
         ax1.bar(x - width / 2, pinn_obj, width, color="#4c72b0", label="PINN")
@@ -69,7 +69,7 @@ def main() -> None:
         ax1.set_xticks(x)
         ax1.set_xticklabels([f"#{rank}" for rank in top_ranks])
         ax1.set_xlabel("Top-ranked candidate")
-        ax1.set_ylabel("Mean load-patch |$u_z$|")
+        ax1.set_ylabel("Peak |$u_z$|")
         ax1.set_title("2. Objective Confirmation")
         ax1.legend(frameon=False, loc="upper left")
 

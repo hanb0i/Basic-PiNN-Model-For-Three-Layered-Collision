@@ -1,4 +1,4 @@
-"""Optimize three-layer designs with the PINN surrogate and confirm top designs with FEM."""
+"""Optimize three-layer designs with a balanced PINN surrogate screening metric."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from three_layer_experiment_utils import (
     GRAPHS_DATA_DIR,
@@ -24,137 +23,68 @@ from three_layer_experiment_utils import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CALIBRATION_PATH = REPO_ROOT / "graphs" / "data" / "three_layer_compliance_calibration.json"
 BENCHMARK_NE_X = 16
 BENCHMARK_NE_Y = 16
 BENCHMARK_NE_Z = 8
-OBJECTIVE_CHOICES = ("peak_downward_abs", "mean_patch_abs")
+OBJECTIVE_CHOICES = ("balanced_score", "peak_downward_abs", "mean_patch_abs")
 
 
-def _torch_ranges(device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-    lows = torch.tensor(
-        [config.E_RANGE[0], config.E_RANGE[0], config.E_RANGE[0], config.T1_RANGE[0], config.T2_RANGE[0], config.T3_RANGE[0]],
-        dtype=torch.float32,
-        device=device,
-    )
-    highs = torch.tensor(
-        [config.E_RANGE[1], config.E_RANGE[1], config.E_RANGE[1], config.T1_RANGE[1], config.T2_RANGE[1], config.T3_RANGE[1]],
-        dtype=torch.float32,
-        device=device,
-    )
-    return lows, highs
+def material_cost(case: ThreeLayerCase, alpha: float) -> float:
+    e = np.asarray(case.e, dtype=float)
+    t = np.asarray(case.t, dtype=float)
+    return float(np.sum((e**alpha) * t))
 
 
-def _params_from_raw(raw: torch.Tensor, lows: torch.Tensor, highs: torch.Tensor) -> torch.Tensor:
-    return lows + (highs - lows) * torch.sigmoid(raw)
-
-
-def _differentiable_top_points(params: torch.Tensor, ne_x: int, ne_y: int, device: torch.device) -> torch.Tensor:
-    x_nodes = torch.linspace(0.0, float(config.Lx), int(ne_x) + 1, device=device)
-    y_nodes = torch.linspace(0.0, float(config.Ly), int(ne_y) + 1, device=device)
-    xg, yg = torch.meshgrid(x_nodes, y_nodes, indexing="ij")
-    e1, e2, e3, t1, t2, t3 = [params[i] for i in range(6)]
-    thickness = t1 + t2 + t3
-    n = xg.numel()
-    return torch.stack(
-        [
-            xg.reshape(-1),
-            yg.reshape(-1),
-            thickness.expand(n),
-            e1.expand(n),
-            t1.expand(n),
-            e2.expand(n),
-            t2.expand(n),
-            e3.expand(n),
-            t3.expand(n),
-            torch.full((n,), float(getattr(config, "RESTITUTION_REF", 0.5)), device=device),
-            torch.full((n,), float(getattr(config, "FRICTION_REF", 0.3)), device=device),
-            torch.full((n,), float(getattr(config, "IMPACT_VELOCITY_REF", 1.0)), device=device),
-        ],
-        dim=1,
-    )
-
-
-def _torch_u_from_v(v: torch.Tensor, pts: torch.Tensor) -> torch.Tensor:
-    e_scale = (pts[:, 3:4] + pts[:, 5:6] + pts[:, 7:8]) / 3.0
-    t_scale = pts[:, 4:5] + pts[:, 6:7] + pts[:, 8:9]
-    e_pow = float(getattr(config, "E_COMPLIANCE_POWER", 1.0))
-    alpha = float(getattr(config, "THICKNESS_COMPLIANCE_ALPHA", 0.0))
-    scale = float(getattr(config, "DISPLACEMENT_COMPLIANCE_SCALE", 1.0))
-    h_ref = float(getattr(config, "H", 1.0))
-    return scale * v / (e_scale ** e_pow) * (h_ref / torch.clamp(t_scale, min=1e-8)) ** alpha
-
-
-def _differentiable_design_objective(pinn, params: torch.Tensor, ne_x: int, ne_y: int, device: torch.device) -> torch.Tensor:
-    """Weighted objective for nontrivial layered design.
-
-    The first term controls transmitted/average load-patch deflection. The
-    second term penalizes material usage, preventing the optimum from being
-    "make all layers as stiff and thick as possible." The third term softly
-    discourages concentrating deformation in only one layer by penalizing large
-    stiffness contrast.
-    """
-    pts = _differentiable_top_points(params, ne_x, ne_y, device)
-    v = pinn(pts)
-    u = _torch_u_from_v(v, pts)
-    x = pts[:, 0]
-    y = pts[:, 1]
-    patch = (
-        (x >= float(config.LOAD_PATCH_X[0]))
-        & (x <= float(config.LOAD_PATCH_X[1]))
-        & (y >= float(config.LOAD_PATCH_Y[0]))
-        & (y <= float(config.LOAD_PATCH_Y[1]))
-    )
-    uz_patch = u[patch, 2] if torch.any(patch) else u[:, 2]
-    mean_patch_abs = torch.mean(torch.abs(uz_patch))
-    e = params[:3]
-    t = params[3:]
-    material_cost = torch.sum(e * t) / (3.0 * float(config.E_RANGE[1]) * float(config.T3_RANGE[1]))
-    contrast_penalty = torch.var(torch.log(torch.clamp(e, min=1e-8)))
-    constraint_penalty = torch.relu(torch.min(e) - 4.999) ** 2
-    return mean_patch_abs + 0.03 * material_cost + 0.005 * contrast_penalty + 10.0 * constraint_penalty
-
-
-def _gradient_optimize_designs(pinn, device: torch.device, n_starts: int, steps: int, lr: float, ne_x: int, ne_y: int, seed: int) -> list[dict]:
-    torch.manual_seed(seed)
+def latin_hypercube_cases(n_cases: int, seed: int) -> list[ThreeLayerCase]:
     rng = np.random.default_rng(seed)
-    lows, highs = _torch_ranges(device)
-    results = []
-    for start_idx in range(n_starts):
-        initial = torch.tensor(rng.uniform(lows.cpu().numpy(), highs.cpu().numpy()), dtype=torch.float32, device=device)
-        raw = torch.logit(torch.clamp((initial - lows) / (highs - lows), 1e-4, 1.0 - 1e-4)).detach().clone().requires_grad_(True)
-        opt = torch.optim.Adam([raw], lr=lr)
-        best = None
-        for step in range(steps):
-            opt.zero_grad()
-            params = _params_from_raw(raw, lows, highs)
-            objective = _differentiable_design_objective(pinn, params, ne_x, ne_y, device)
-            objective.backward()
-            opt.step()
-            with torch.no_grad():
-                params_now = _params_from_raw(raw, lows, highs).detach().cpu().numpy()
-                objective_now = float(objective.detach().cpu())
-                feasible = bool(np.min(params_now[:3]) < 5.0)
-                if best is None or objective_now < best["objective"]:
-                    best = {"objective": objective_now, "params": params_now.copy(), "step": step, "feasible": feasible}
-        assert best is not None
-        e1, e2, e3, t1, t2, t3 = [float(v) for v in best["params"]]
-        case = ThreeLayerCase(
-            f"gradient_start_{start_idx:03d}",
-            e1,
-            e2,
-            e3,
-            t1,
-            t2,
-            t3,
-        )
-        eval_result = evaluate_case_top_surface(pinn, device, case, ne_x, ne_y)
-        eval_result["optimizer_objective"] = best["objective"]
-        eval_result["optimizer_step"] = best["step"]
-        eval_result["constraint_min_E_lt_5"] = best["feasible"]
-        results.append(eval_result)
-    return results
+    lows = np.asarray(
+        [
+            config.E_RANGE[0],
+            config.E_RANGE[0],
+            config.E_RANGE[0],
+            config.T1_RANGE[0],
+            config.T2_RANGE[0],
+            config.T3_RANGE[0],
+        ],
+        dtype=float,
+    )
+    highs = np.asarray(
+        [
+            config.E_RANGE[1],
+            config.E_RANGE[1],
+            config.E_RANGE[1],
+            config.T1_RANGE[1],
+            config.T2_RANGE[1],
+            config.T3_RANGE[1],
+        ],
+        dtype=float,
+    )
+    unit = np.empty((n_cases, 6), dtype=float)
+    for dim in range(6):
+        unit[:, dim] = (rng.permutation(n_cases) + rng.random(n_cases)) / n_cases
+    values = lows + unit * (highs - lows)
+    return [
+        ThreeLayerCase(f"lhs_{idx:03d}", *[float(v) for v in values[idx]])
+        for idx in range(n_cases)
+    ]
+
+
+def _normalize(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    return (values - values.min()) / (values.max() - values.min() + 1e-8)
+
+
+def _score_candidates(results: list[dict], lambda_cost: float, cost_alpha: float) -> None:
+    disp = np.asarray([float(r["peak_downward_abs"]) for r in results], dtype=float)
+    cost = np.asarray([material_cost(r["case"], cost_alpha) for r in results], dtype=float)
+    disp_norm = _normalize(disp)
+    cost_norm = _normalize(cost)
+    score = disp_norm + float(lambda_cost) * cost_norm
+    for idx, result in enumerate(results):
+        result["material_cost"] = float(cost[idx])
+        result["disp_norm"] = float(disp_norm[idx])
+        result["cost_norm"] = float(cost_norm[idx])
+        result["balanced_score"] = float(score[idx])
 
 
 def _objective_value(result: dict, objective: str) -> float:
@@ -176,19 +106,21 @@ def _candidate_row(result: dict, rank: int | None = None) -> dict:
         "peak_downward_abs": f"{result['peak_downward_abs']:.10g}",
         "mean_patch_uz": f"{result['mean_patch_uz']:.10g}",
         "mean_patch_abs": f"{result['mean_patch_abs']:.10g}",
+        "material_cost": f"{result['material_cost']:.10g}",
+        "disp_norm": f"{result['disp_norm']:.10g}",
+        "cost_norm": f"{result['cost_norm']:.10g}",
+        "balanced_score": f"{result['balanced_score']:.10g}",
         "pinn_eval_seconds": f"{result['pinn_eval_seconds']:.6f}",
         "n_eval_points": str(result["n_eval_points"]),
-        "optimizer_objective": f"{float(result.get('optimizer_objective', np.nan)):.10g}",
-        "optimizer_step": str(result.get("optimizer_step", "")),
-        "constraint_min_E_lt_5": str(result.get("constraint_min_E_lt_5", "")),
     }
     if rank is not None:
         row["rank"] = str(rank)
     return row
 
 
-def _confirmation_row(rank: int, pinn_result: dict, fem_result: dict) -> dict:
+def _confirmation_row(rank: int, pinn_result: dict, fem_result: dict, cost_alpha: float) -> dict:
     case = pinn_result["case"]
+    cost = material_cost(case, cost_alpha)
     return {
         "rank": str(rank),
         "case_id": case.case_id,
@@ -199,6 +131,10 @@ def _confirmation_row(rank: int, pinn_result: dict, fem_result: dict) -> dict:
         "t2": f"{case.t2:.8g}",
         "t3": f"{case.t3:.8g}",
         "total_thickness": f"{case.thickness:.8g}",
+        "material_cost": f"{cost:.10g}",
+        "pinn_balanced_score": f"{pinn_result['balanced_score']:.10g}",
+        "pinn_disp_norm": f"{pinn_result['disp_norm']:.10g}",
+        "pinn_cost_norm": f"{pinn_result['cost_norm']:.10g}",
         "pinn_peak_downward_uz": f"{pinn_result['peak_downward_uz']:.10g}",
         "pinn_peak_downward_abs": f"{pinn_result['peak_downward_abs']:.10g}",
         "fem_peak_downward_uz": f"{fem_result['peak_downward_uz']:.10g}",
@@ -221,111 +157,83 @@ def _confirmation_row(rank: int, pinn_result: dict, fem_result: dict) -> dict:
     }
 
 
+def _candidate_fieldnames(include_rank: bool = False) -> list[str]:
+    fields = [
+        "case_id",
+        "e1",
+        "e2",
+        "e3",
+        "t1",
+        "t2",
+        "t3",
+        "total_thickness",
+        "peak_downward_uz",
+        "peak_downward_abs",
+        "mean_patch_uz",
+        "mean_patch_abs",
+        "material_cost",
+        "disp_norm",
+        "cost_norm",
+        "balanced_score",
+        "pinn_eval_seconds",
+        "n_eval_points",
+    ]
+    return ["rank", *fields] if include_rank else fields
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", default=None)
     parser.add_argument("--calibration-json", default=None)
-    parser.add_argument("--objective", choices=OBJECTIVE_CHOICES, default="mean_patch_abs")
-    parser.add_argument("--n-candidates", type=int, default=24, help="Number of gradient-descent starts")
-    parser.add_argument("--optimization-steps", type=int, default=250)
-    parser.add_argument("--optimization-lr", type=float, default=0.05)
+    parser.add_argument("--objective", choices=OBJECTIVE_CHOICES, default="balanced_score")
+    parser.add_argument("--n-candidates", type=int, default=500)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--seed", type=int, default=20260423)
+    parser.add_argument("--lambda-cost", type=float, default=0.25)
+    parser.add_argument("--cost-alpha", type=float, default=1.5)
     parser.add_argument("--surrogate-ne-x", type=int, default=20)
     parser.add_argument("--surrogate-ne-y", type=int, default=20)
     parser.add_argument("--fem-ne-x", type=int, default=BENCHMARK_NE_X)
     parser.add_argument("--fem-ne-y", type=int, default=BENCHMARK_NE_Y)
     parser.add_argument("--fem-ne-z", type=int, default=BENCHMARK_NE_Z)
-    parser.add_argument("--out-candidates-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_mean_patch_candidates.csv"))
-    parser.add_argument("--out-topk-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_mean_patch_topk.csv"))
-    parser.add_argument("--out-confirmation-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_mean_patch_confirmation.csv"))
-    parser.add_argument("--out-summary", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_mean_patch_summary.json"))
+    parser.add_argument("--out-candidates-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_balanced_candidates.csv"))
+    parser.add_argument("--out-topk-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_balanced_topk.csv"))
+    parser.add_argument("--out-confirmation-csv", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_balanced_confirmation.csv"))
+    parser.add_argument("--out-summary", default=str(GRAPHS_DATA_DIR / "surrogate_optimization_balanced_summary.json"))
     args = parser.parse_args()
 
     ensure_output_dirs()
     calibration_path = args.calibration_json or os.getenv("PINN_CALIBRATION_JSON")
-    if calibration_path:
-        os.environ["PINN_CALIBRATION_JSON"] = calibration_path
-    elif DEFAULT_CALIBRATION_PATH.exists():
-        os.environ["PINN_CALIBRATION_JSON"] = str(DEFAULT_CALIBRATION_PATH)
-        calibration_path = str(DEFAULT_CALIBRATION_PATH)
+    if args.calibration_json:
+        os.environ["PINN_CALIBRATION_JSON"] = args.calibration_json
 
     device = select_device()
     pinn, model_path = load_pinn(device, args.model_path)
 
-    print(f"Running {args.n_candidates} multi-start gradient optimizations with the PINN surrogate...")
-    candidate_results = _gradient_optimize_designs(
-        pinn,
-        device,
-        n_starts=args.n_candidates,
-        steps=args.optimization_steps,
-        lr=args.optimization_lr,
-        ne_x=args.surrogate_ne_x,
-        ne_y=args.surrogate_ne_y,
-        seed=args.seed,
-    )
-    for idx, result in enumerate(candidate_results, start=1):
-        print(
-            f"  start {idx:3d}: objective={result['optimizer_objective']:.6g}, "
-            f"{args.objective}={_objective_value(result, args.objective):.6g}, "
-            f"min(E)={min(result['case'].e):.3g}"
-        )
+    print(f"Screening {args.n_candidates} Latin-hypercube designs with the PINN surrogate...")
+    candidate_results = []
+    for idx, case in enumerate(latin_hypercube_cases(args.n_candidates, args.seed), start=1):
+        result = evaluate_case_top_surface(pinn, device, case, args.surrogate_ne_x, args.surrogate_ne_y)
+        candidate_results.append(result)
+        if idx == 1 or idx == args.n_candidates or idx % 50 == 0:
+            print(f"  evaluated {idx}/{args.n_candidates}", flush=True)
 
-    candidate_results.sort(key=lambda r: (_objective_value(r, args.objective), r["peak_downward_abs"], r["mean_patch_abs"]))
+    _score_candidates(candidate_results, args.lambda_cost, args.cost_alpha)
+    candidate_results.sort(key=lambda r: (_objective_value(r, args.objective), r["peak_downward_abs"], r["material_cost"]))
     top_k = candidate_results[: max(1, min(args.top_k, len(candidate_results)))]
 
-    candidate_rows = [_candidate_row(result) for result in candidate_results]
     rows_to_csv(
         Path(args.out_candidates_csv),
-        [
-            "case_id",
-            "e1",
-            "e2",
-            "e3",
-            "t1",
-            "t2",
-            "t3",
-            "total_thickness",
-            "peak_downward_uz",
-            "peak_downward_abs",
-            "mean_patch_uz",
-            "mean_patch_abs",
-            "pinn_eval_seconds",
-            "n_eval_points",
-            "optimizer_objective",
-            "optimizer_step",
-            "constraint_min_E_lt_5",
-        ],
-        candidate_rows,
+        _candidate_fieldnames(),
+        [_candidate_row(result) for result in candidate_results],
     )
-
-    topk_rows = [_candidate_row(result, rank=rank) for rank, result in enumerate(top_k, start=1)]
     rows_to_csv(
         Path(args.out_topk_csv),
-        [
-            "rank",
-            "case_id",
-            "e1",
-            "e2",
-            "e3",
-            "t1",
-            "t2",
-            "t3",
-            "total_thickness",
-            "peak_downward_uz",
-            "peak_downward_abs",
-            "mean_patch_uz",
-            "mean_patch_abs",
-            "pinn_eval_seconds",
-            "n_eval_points",
-            "optimizer_objective",
-            "optimizer_step",
-            "constraint_min_E_lt_5",
-        ],
-        topk_rows,
+        _candidate_fieldnames(include_rank=True),
+        [_candidate_row(result, rank=rank) for rank, result in enumerate(top_k, start=1)],
     )
 
-    print(f"Confirming the top {len(top_k)} surrogate-ranked designs with FEM...")
+    print(f"Confirming the top {len(top_k)} balanced designs with FEM...")
     confirmation_rows = []
     fem_confirmations = []
     for rank, pinn_result in enumerate(top_k, start=1):
@@ -350,19 +258,12 @@ def main() -> None:
             "fem_seconds": grid_result["fem_seconds"],
             "n_eval_points": int(top_metrics["x_grid"].size),
         }
-        pinn_confirm_result = {
-            "case": pinn_result["case"],
-            "peak_downward_uz": top_metrics["pinn_top_metrics"]["peak_downward_uz"],
-            "peak_downward_abs": top_metrics["pinn_top_metrics"]["peak_downward_abs"],
-            "mean_patch_uz": top_metrics["pinn_top_metrics"]["mean_patch_uz"],
-            "mean_patch_abs": top_metrics["pinn_top_metrics"]["mean_patch_abs"],
-            "pinn_eval_seconds": grid_result["pinn_eval_seconds"],
-        }
         fem_confirmations.append(fem_result)
-        confirmation_rows.append(_confirmation_row(rank, pinn_confirm_result, fem_result))
+        confirmation_rows.append(_confirmation_row(rank, pinn_result, fem_result, args.cost_alpha))
         print(
-            f"  rank {rank}: PINN {args.objective}={_objective_value(pinn_confirm_result, args.objective):.6g}, "
-            f"FEM {args.objective}={_objective_value(fem_result, args.objective):.6g}"
+            f"  rank {rank}: score={pinn_result['balanced_score']:.6g}, "
+            f"PINN peak={pinn_result['peak_downward_abs']:.6g}, FEM peak={fem_result['peak_downward_abs']:.6g}",
+            flush=True,
         )
 
     rows_to_csv(
@@ -377,6 +278,10 @@ def main() -> None:
             "t2",
             "t3",
             "total_thickness",
+            "material_cost",
+            "pinn_balanced_score",
+            "pinn_disp_norm",
+            "pinn_cost_norm",
             "pinn_peak_downward_uz",
             "pinn_peak_downward_abs",
             "fem_peak_downward_uz",
@@ -398,40 +303,35 @@ def main() -> None:
         confirmation_rows,
     )
 
-    surrogate_objectives = np.array([_objective_value(r, args.objective) for r in candidate_results], dtype=float)
-    pinn_times = np.array([r["pinn_eval_seconds"] for r in candidate_results], dtype=float)
-    fem_objectives = np.array([_objective_value(r, args.objective) for r in fem_confirmations], dtype=float)
-    top_mae = np.array([r["top_uz_mae_pct"] for r in fem_confirmations], dtype=float)
-    vol_mae = np.array([r["volume_mae_pct"] for r in fem_confirmations], dtype=float)
-    fem_gaps = np.array(
-        [
-            abs(_objective_value({"peak_downward_abs": float(pinn_result["pinn_peak_downward_abs"]), "mean_patch_abs": float(pinn_result["pinn_mean_patch_abs"])}, args.objective) - _objective_value(fem_result, args.objective))
-            for pinn_result, fem_result in zip(confirmation_rows, fem_confirmations)
-        ],
+    surrogate_objectives = np.asarray([_objective_value(r, args.objective) for r in candidate_results], dtype=float)
+    pinn_times = np.asarray([r["pinn_eval_seconds"] for r in candidate_results], dtype=float)
+    fem_peak = np.asarray([r["peak_downward_abs"] for r in fem_confirmations], dtype=float)
+    top_mae = np.asarray([r["top_uz_mae_pct"] for r in fem_confirmations], dtype=float)
+    vol_mae = np.asarray([r["volume_mae_pct"] for r in fem_confirmations], dtype=float)
+    fem_gaps = np.asarray(
+        [abs(p["peak_downward_abs"] - f["peak_downward_abs"]) for p, f in zip(top_k, fem_confirmations)],
         dtype=float,
     )
-    fem_best_idx = int(np.argmin(fem_objectives))
+    fem_best_idx = int(np.argmin(fem_peak))
     summary = {
         "model_path": str(model_path),
         "seed": int(args.seed),
         "n_candidates": int(args.n_candidates),
         "top_k": int(len(top_k)),
         "calibration_json": calibration_path,
-        "benchmark_protocol": "random_interior_generalization_style_confirmation",
+        "benchmark_protocol": "latin_hypercube_pinn_screening_fem_confirmation",
         "optimization_protocol": {
-            "method": "multi_start_adam_gradient_descent_on_pinn_surrogate",
-            "n_starts": int(args.n_candidates),
-            "steps_per_start": int(args.optimization_steps),
-            "learning_rate": float(args.optimization_lr),
-            "constraint": "at least one layer Young's modulus must be less than 5",
+            "method": "latin_hypercube_screening_on_pinn_surrogate",
+            "n_candidates": int(args.n_candidates),
+            "selection": f"rank by {args.objective}",
         },
         "objective": {
-            "name": "weighted_mean_patch_deflection_material_cost_and_contrast",
-            "description": (
-                "Minimize mean absolute load-patch deflection plus small material-cost and stiffness-contrast penalties. "
-                "This is more meaningful than minimizing max displacement alone because it penalizes transmitted response "
-                "over the loaded area while discouraging the trivial all-stiff/all-thick solution."
-            ),
+            "name": "balanced_peak_displacement_material_cost",
+            "formula": "score = normalized_peak_downward_abs + lambda_cost * normalized_material_cost",
+            "displacement_metric": "peak_downward_abs",
+            "material_cost": "sum_i E_i^alpha * t_i",
+            "lambda_cost": float(args.lambda_cost),
+            "cost_alpha": float(args.cost_alpha),
             "reported_surrogate_metric": args.objective,
         },
         "surrogate_grid": {"ne_x": int(args.surrogate_ne_x), "ne_y": int(args.surrogate_ne_y)},
@@ -446,48 +346,33 @@ def main() -> None:
         "best_surrogate_design": {
             "rank": 1,
             "case_id": top_k[0]["case"].case_id,
-            "e": [float(top_k[0]["case"].e1), float(top_k[0]["case"].e2), float(top_k[0]["case"].e3)],
-            "t": [float(top_k[0]["case"].t1), float(top_k[0]["case"].t2), float(top_k[0]["case"].t3)],
+            "e": [float(v) for v in top_k[0]["case"].e],
+            "t": [float(v) for v in top_k[0]["case"].t],
+            "balanced_score": float(top_k[0]["balanced_score"]),
+            "disp_norm": float(top_k[0]["disp_norm"]),
+            "cost_norm": float(top_k[0]["cost_norm"]),
+            "material_cost": float(top_k[0]["material_cost"]),
             "peak_downward_uz": float(top_k[0]["peak_downward_uz"]),
             "peak_downward_abs": float(top_k[0]["peak_downward_abs"]),
             "mean_patch_uz": float(top_k[0]["mean_patch_uz"]),
             "mean_patch_abs": float(top_k[0]["mean_patch_abs"]),
         },
-        "best_fem_confirmed_design_among_top_k": {
+        "best_fem_peak_design_among_top_k": {
             "rank_within_top_k": fem_best_idx + 1,
             "case_id": top_k[fem_best_idx]["case"].case_id,
-            "e": [
-                float(top_k[fem_best_idx]["case"].e1),
-                float(top_k[fem_best_idx]["case"].e2),
-                float(top_k[fem_best_idx]["case"].e3),
-            ],
-            "t": [
-                float(top_k[fem_best_idx]["case"].t1),
-                float(top_k[fem_best_idx]["case"].t2),
-                float(top_k[fem_best_idx]["case"].t3),
-            ],
+            "e": [float(v) for v in top_k[fem_best_idx]["case"].e],
+            "t": [float(v) for v in top_k[fem_best_idx]["case"].t],
             "fem_peak_downward_uz": float(fem_confirmations[fem_best_idx]["peak_downward_uz"]),
             "fem_peak_downward_abs": float(fem_confirmations[fem_best_idx]["peak_downward_abs"]),
         },
         "fem_confirmation": {
-            "mean_abs_gap_objective": float(fem_gaps.mean()),
-            "worst_abs_gap_objective": float(fem_gaps.max()),
-            "mean_rel_gap_objective_pct": float(
+            "mean_abs_gap_peak_downward_abs": float(fem_gaps.mean()),
+            "worst_abs_gap_peak_downward_abs": float(fem_gaps.max()),
+            "mean_rel_gap_peak_downward_pct": float(
                 np.mean(
                     [
-                        100.0
-                        * abs(
-                            _objective_value(
-                                {
-                                    "peak_downward_abs": float(pinn_result["pinn_peak_downward_abs"]),
-                                    "mean_patch_abs": float(pinn_result["pinn_mean_patch_abs"]),
-                                },
-                                args.objective,
-                            )
-                            - _objective_value(fem_result, args.objective)
-                        )
-                        / max(_objective_value(fem_result, args.objective), 1e-12)
-                        for pinn_result, fem_result in zip(confirmation_rows, fem_confirmations)
+                        100.0 * abs(p["peak_downward_abs"] - f["peak_downward_abs"]) / max(f["peak_downward_abs"], 1e-12)
+                        for p, f in zip(top_k, fem_confirmations)
                     ]
                 )
             ),
