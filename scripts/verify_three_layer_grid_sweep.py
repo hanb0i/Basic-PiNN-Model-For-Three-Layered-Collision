@@ -2,10 +2,12 @@
 """
 Reproducible grid-sweep verification for the three-layer PINN.
 
-This script evaluates the three-layer PINN against FEM on an exhaustive grid of
-parameter combinations (E₁ × E₂ × E₃ × t₁ × t₂ × t₃), matching the benchmark
-protocol used in the paper.  It reports top-surface z-displacement MAE% for
-every case and summarizes mean / worst / best.
+Evaluates the three-layer PINN against FEM on an exhaustive parameter grid
+(E₁ × E₂ × E₃ × t₁ × t₂ × t₃), using the same method as compare_three_layer_pinn_fem.py:
+- FEM is solved on a 16×16×8 Hex8 mesh
+- PINN is queried at the FEM mesh nodes (no interpolation)
+- Compliance scaling (_u_from_v) is applied exactly as in training
+- Optional calibration multiplier is supported via PINN_CALIBRATION_JSON
 
 Usage:
     cd /path/to/repo
@@ -14,16 +16,12 @@ Usage:
 Environment variables (all optional):
     PINN_MODEL_PATH      – path to the three-layer PINN checkpoint
                            (default: pinn-workflow/pinn_model.pth)
-    PINN_DEVICE          – torch device string, e.g. "cpu", "cuda", "mps"
-                           (default: auto-detect)
-    PINN_EVAL_E_VALUES   – comma-separated E values to sweep
-                           (default: from three-layer-workflow/pinn_config.py E_RANGE)
-    PINN_EVAL_T1_VALUES  – comma-separated t₁ values to sweep
-                           (default: from three-layer-workflow/pinn_config.py DATA_T1_VALUES)
-    PINN_EVAL_T2_VALUES  – comma-separated t₂ values to sweep
-                           (default: from three-layer-workflow/pinn_config.py DATA_T2_VALUES)
-    PINN_EVAL_T3_VALUES  – comma-separated t₃ values to sweep
-                           (default: from three-layer-workflow/pinn_config.py DATA_T3_VALUES)
+    PINN_DEVICE          – torch device string (default: auto-detect)
+    PINN_CALIBRATION_JSON – path to calibration coefficients JSON
+    PINN_EVAL_E_VALUES   – comma-separated E values (default: from config E_RANGE)
+    PINN_EVAL_T1_VALUES  – comma-separated t₁ values (default: from config DATA_T1_VALUES)
+    PINN_EVAL_T2_VALUES  – comma-separated t₂ values (default: from config DATA_T2_VALUES)
+    PINN_EVAL_T3_VALUES  – comma-separated t₃ values (default: from config DATA_T3_VALUES)
     PINN_EVAL_NE_X       – FEM mesh elements in x (default: 16)
     PINN_EVAL_NE_Y       – FEM mesh elements in y (default: 16)
     PINN_EVAL_NE_Z       – FEM mesh elements in z (default: 8)
@@ -40,7 +38,6 @@ import numpy as np
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-# Code lives in three-layer-workflow/; the best checkpoint is in pinn-workflow/
 CODE_DIR = REPO_ROOT / "three-layer-workflow"
 PINN_WORKFLOW_DIR = REPO_ROOT / "pinn-workflow"
 if not PINN_WORKFLOW_DIR.exists():
@@ -56,46 +53,86 @@ import model  # noqa: E402
 import pinn_config as config  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Helpers (mirrored from compare_three_layer_pinn_fem.py to keep standalone)
+# Helpers (copied exactly from compare_three_layer_pinn_fem.py)
 # ---------------------------------------------------------------------------
 
-
-def _select_device() -> torch.device:
-    requested = os.getenv("PINN_DEVICE")
-    if requested:
-        return torch.device(requested)
-    if os.getenv("PINN_FORCE_CPU", "0") == "1":
-        return torch.device("cpu")
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+_CALIBRATION_CACHE = {}
 
 
-def _load_pinn(device: torch.device) -> torch.nn.Module:
-    model_path = Path(os.getenv("PINN_MODEL_PATH") or PINN_WORKFLOW_DIR / "pinn_model.pth")
-    if not model_path.exists():
-        raise FileNotFoundError(f"PINN checkpoint not found: {model_path}")
-    pinn = model.MultiLayerPINN().to(device)
-    sd = torch.load(str(model_path), map_location=device, weights_only=True)
-    sd = model.adapt_legacy_state_dict(sd, pinn.state_dict())
-    pinn.load_state_dict(sd, strict=False)
-    pinn.eval()
-    print(f"Loaded PINN checkpoint: {model_path}")
-    return pinn
-
-
-def _ref_params() -> tuple[float, float, float]:
-    return (
-        float(getattr(config, "RESTITUTION_REF", 0.5)),
-        float(getattr(config, "FRICTION_REF", 0.3)),
-        float(getattr(config, "IMPACT_VELOCITY_REF", 1.0)),
+def _calibration_features(pts):
+    x = pts[:, 0:1]
+    y = pts[:, 1:2]
+    z = pts[:, 2:3]
+    e1 = pts[:, 3:4]
+    t1 = pts[:, 4:5]
+    e2 = pts[:, 5:6]
+    t2 = pts[:, 6:7]
+    e3 = pts[:, 7:8]
+    t3 = pts[:, 8:9]
+    t_total = np.clip(t1 + t2 + t3, 1e-8, None)
+    e_mean = np.clip((e1 + e2 + e3) / 3.0, 1e-8, None)
+    z_hat = z / t_total
+    e_ref = np.sqrt(float(config.E_RANGE[0]) * float(config.E_RANGE[1]))
+    h_ref = float(getattr(config, "H", 0.1))
+    load_x = ((x >= config.LOAD_PATCH_X[0]) & (x <= config.LOAD_PATCH_X[1])).astype(float)
+    load_y = ((y >= config.LOAD_PATCH_Y[0]) & (y <= config.LOAD_PATCH_Y[1])).astype(float)
+    load_patch = load_x * load_y
+    xc = x - 0.5 * float(config.Lx)
+    yc = y - 0.5 * float(config.Ly)
+    feats = np.concatenate(
+        [
+            np.ones_like(x),
+            np.log(e_mean / e_ref),
+            np.log(np.clip(e1, 1e-8, None) / e_ref),
+            np.log(np.clip(e2, 1e-8, None) / e_ref),
+            np.log(np.clip(e3, 1e-8, None) / e_ref),
+            np.log(h_ref / t_total),
+            t1 / t_total,
+            t2 / t_total,
+            t3 / t_total,
+            z_hat,
+            z_hat**2,
+            load_patch,
+            xc,
+            yc,
+            xc**2,
+            yc**2,
+            xc * yc,
+            load_patch * xc,
+            load_patch * yc,
+            load_patch * xc**2,
+            load_patch * yc**2,
+        ],
+        axis=1,
     )
+    return np.nan_to_num(feats, nan=0.0, posinf=0.0, neginf=0.0)
 
 
-def _u_from_v(v: np.ndarray, pts: np.ndarray) -> np.ndarray:
-    """Apply compliance scaling to raw network output v to get displacement u."""
+def _load_calibration():
+    path = os.getenv("PINN_CALIBRATION_JSON")
+    if not path:
+        return None
+    if path not in _CALIBRATION_CACHE:
+        _CALIBRATION_CACHE[path] = json.loads(open(path, "r").read()) if os.path.exists(path) else None
+    return _CALIBRATION_CACHE[path]
+
+
+def _calibration_multiplier(pts):
+    cal = _load_calibration()
+    if not cal:
+        return None
+    coeffs = cal.get("feature_coefficients")
+    if coeffs is None:
+        return None
+    coeffs_arr = np.asarray(coeffs, dtype=float).reshape(-1, 1)
+    feats = _calibration_features(pts)
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+        log_multiplier = np.nan_to_num(feats @ coeffs_arr, nan=0.0, posinf=0.0, neginf=0.0)
+    clip = float(cal.get("log_multiplier_clip", 1.5))
+    return np.exp(np.clip(log_multiplier, -clip, clip))
+
+
+def _u_from_v(v, pts):
     e_scale = (pts[:, 3:4] + pts[:, 5:6] + pts[:, 7:8]) / 3.0
     t_scale = pts[:, 4:5] + pts[:, 6:7] + pts[:, 8:9]
     e_pow = float(getattr(config, "E_COMPLIANCE_POWER", 1.0))
@@ -103,46 +140,34 @@ def _u_from_v(v: np.ndarray, pts: np.ndarray) -> np.ndarray:
     scale = float(getattr(config, "DISPLACEMENT_COMPLIANCE_SCALE", 1.0))
     h_ref = float(getattr(config, "H", 1.0))
     u = scale * v / (e_scale**e_pow) * (h_ref / np.clip(t_scale, 1e-8, None)) ** alpha
+    multiplier = _calibration_multiplier(pts)
+    if multiplier is not None:
+        u = u * multiplier
     return u
 
 
-def _predict_pinn(
-    pinn: torch.nn.Module,
-    device: torch.device,
-    x_flat: np.ndarray,
-    y_flat: np.ndarray,
-    z_flat: np.ndarray,
-    e1: float,
-    e2: float,
-    e3: float,
-    t1: float,
-    t2: float,
-    t3: float,
-) -> np.ndarray:
-    r_ref, mu_ref, v0_ref = _ref_params()
-    pts = np.stack(
-        [
-            x_flat,
-            y_flat,
-            z_flat,
-            np.full_like(x_flat, float(e1)),
-            np.full_like(x_flat, float(t1)),
-            np.full_like(x_flat, float(e2)),
-            np.full_like(x_flat, float(t2)),
-            np.full_like(x_flat, float(e3)),
-            np.full_like(x_flat, float(t3)),
-            np.full_like(x_flat, r_ref),
-            np.full_like(x_flat, mu_ref),
-            np.full_like(x_flat, v0_ref),
-        ],
-        axis=1,
+def _ref_params():
+    return (
+        float(getattr(config, "RESTITUTION_REF", 0.5)),
+        float(getattr(config, "FRICTION_REF", 0.3)),
+        float(getattr(config, "IMPACT_VELOCITY_REF", 1.0)),
     )
-    with torch.no_grad():
-        v = pinn(torch.tensor(pts, dtype=torch.float32, device=device)).cpu().numpy()
-    return _u_from_v(v, pts)
 
 
-def _run_fem(e1: float, e2: float, e3: float, t1: float, t2: float, t3: float, ne_x: int, ne_y: int, ne_z: int):
+def _load_pinn(device):
+    pinn = model.MultiLayerPINN().to(device)
+    model_path = os.getenv("PINN_MODEL_PATH") or str(PINN_WORKFLOW_DIR / "pinn_model.pth")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"PINN checkpoint not found: {model_path}")
+    sd = torch.load(model_path, map_location=device, weights_only=True)
+    sd = model.adapt_legacy_state_dict(sd, pinn.state_dict())
+    pinn.load_state_dict(sd, strict=False)
+    pinn.eval()
+    print(f"Loaded PINN checkpoint: {model_path}")
+    return pinn
+
+
+def _run_fem(e1, e2, e3, t1, t2, t3, ne_x, ne_y, ne_z):
     thickness = float(t1) + float(t2) + float(t3)
     cfg = {
         "geometry": {
@@ -169,9 +194,33 @@ def _run_fem(e1: float, e2: float, e3: float, t1: float, t2: float, t3: float, n
     return fem_solver.solve_three_layer_fem(cfg)
 
 
-def _mae_pct(pred: np.ndarray, ref: np.ndarray) -> float:
-    mae = float(np.mean(np.abs(pred - ref)))
-    denom = float(np.max(np.abs(ref)))
+def _predict_pinn(pinn, device, x_flat, y_flat, z_flat, e1, e2, e3, t1, t2, t3):
+    r_ref, mu_ref, v0_ref = _ref_params()
+    pts = np.stack(
+        [
+            x_flat,
+            y_flat,
+            z_flat,
+            np.full_like(x_flat, float(e1)),
+            np.full_like(x_flat, float(t1)),
+            np.full_like(x_flat, float(e2)),
+            np.full_like(x_flat, float(t2)),
+            np.full_like(x_flat, float(e3)),
+            np.full_like(x_flat, float(t3)),
+            np.full_like(x_flat, r_ref),
+            np.full_like(x_flat, mu_ref),
+            np.full_like(x_flat, v0_ref),
+        ],
+        axis=1,
+    )
+    with torch.no_grad():
+        v = pinn(torch.tensor(pts, dtype=torch.float32, device=device)).cpu().numpy()
+    return _u_from_v(v, pts)
+
+
+def _mae_pct(u_pred, u_ref):
+    mae = float(np.mean(np.abs(u_pred - u_ref)))
+    denom = float(np.max(np.abs(u_ref)))
     return 100.0 * mae / denom if denom > 0 else 0.0
 
 
@@ -181,7 +230,15 @@ def _mae_pct(pred: np.ndarray, ref: np.ndarray) -> float:
 
 
 def main() -> None:
-    device = _select_device()
+    # Device selection (match compare_three_layer_pinn_fem.py logic)
+    if os.environ.get("PINN_FORCE_CPU", "0") == "1":
+        device = torch.device("cpu")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
     # Mesh resolution
@@ -190,31 +247,17 @@ def main() -> None:
     ne_z = int(os.getenv("PINN_EVAL_NE_Z", "8"))
     print(f"FEM mesh: {ne_x} × {ne_y} × {ne_z}")
 
-    # Parameter grid
+    # Parameter grid (match compare_three_layer_pinn_fem.py logic)
     e_env = os.getenv("PINN_EVAL_E_VALUES")
     if e_env:
         e_values = [float(v.strip()) for v in e_env.split(",")]
     else:
         e_range = getattr(config, "E_RANGE", [1.0, 10.0])
-        e_values = [float(e_range[0]), float(e_range[1])]
+        e_values = [float(e_range[0]), float(e_range[-1])]
 
-    t1_env = os.getenv("PINN_EVAL_T1_VALUES")
-    if t1_env:
-        t1_values = [float(v.strip()) for v in t1_env.split(",")]
-    else:
-        t1_values = [float(v) for v in getattr(config, "DATA_T1_VALUES", [0.02, 0.10])]
-
-    t2_env = os.getenv("PINN_EVAL_T2_VALUES")
-    if t2_env:
-        t2_values = [float(v.strip()) for v in t2_env.split(",")]
-    else:
-        t2_values = [float(v) for v in getattr(config, "DATA_T2_VALUES", [0.02, 0.10])]
-
-    t3_env = os.getenv("PINN_EVAL_T3_VALUES")
-    if t3_env:
-        t3_values = [float(v.strip()) for v in t3_env.split(",")]
-    else:
-        t3_values = [float(v) for v in getattr(config, "DATA_T3_VALUES", [0.02, 0.10])]
+    t1_values = [float(v) for v in getattr(config, "EVAL_T1_VALUES", getattr(config, "DATA_T1_VALUES", [0.02, 0.10]))]
+    t2_values = [float(v) for v in getattr(config, "EVAL_T2_VALUES", getattr(config, "DATA_T2_VALUES", [0.02, 0.10]))]
+    t3_values = [float(v) for v in getattr(config, "EVAL_T3_VALUES", getattr(config, "DATA_T3_VALUES", [0.02, 0.10]))]
 
     n_cases = len(e_values) ** 3 * len(t1_values) * len(t2_values) * len(t3_values)
     print(f"E values: {e_values}")
@@ -226,7 +269,7 @@ def main() -> None:
     pinn = _load_pinn(device)
 
     results = []
-    fea_cache: dict[tuple, tuple] = {}
+    fea_cache = {}
 
     for t1 in t1_values:
         for t2 in t2_values:

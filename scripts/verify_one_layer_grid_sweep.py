@@ -2,27 +2,27 @@
 """
 Reproducible grid-sweep verification for the one-layer PINN.
 
-This script evaluates the one-layer PINN against FEM on a structured grid of
-parameter combinations (E × thickness), matching the benchmark protocol used
-in the paper.  It reports top-surface z-displacement MAE% for every case and
-summarizes mean / worst / best.
+Evaluates the one-layer PINN against FEM on a structured parameter grid
+(E × thickness), using the same method as one_layer_experiment_utils.py:
+- FEM is solved on a configurable Hex8 mesh (default 16×16×8)
+- PINN is queried at the FEM mesh nodes (no interpolation)
+- Compliance scaling (u_from_v) is applied exactly as in training
 
 Usage:
     cd /path/to/repo
     python scripts/verify_one_layer_grid_sweep.py
 
 Environment variables (all optional):
-    PINN_MODEL_PATH      – path to the one-layer PINN checkpoint
-                           (default: one-layer-workflow/pinn_model.pth)
-    PINN_DEVICE          – torch device string, e.g. "cpu", "cuda", "mps"
-                           (default: auto-detect)
-    PINN_EVAL_E_VALUES   – comma-separated E values to sweep
-                           (default: from one-layer-workflow/pinn_config.py E_RANGE)
-    PINN_EVAL_T_VALUES   – comma-separated thickness values to sweep
-                           (default: from one-layer-workflow/pinn_config.py DATA_THICKNESS_VALUES)
-    PINN_EVAL_NE_X       – FEM mesh elements in x (default: 16)
-    PINN_EVAL_NE_Y       – FEM mesh elements in y (default: 16)
-    PINN_EVAL_NE_Z       – FEM mesh elements in z (default: 8)
+    PINN_MODEL_PATH          – path to the one-layer PINN checkpoint
+                               (default: one-layer-workflow/pinn_model.pth)
+    PINN_DEVICE              – torch device string (default: auto-detect)
+    PINN_EVAL_E_VALUES       – comma-separated E values
+                               (default: from config DATA_E_VALUES)
+    PINN_EVAL_T_VALUES       – comma-separated thickness values
+                               (default: from config DATA_THICKNESS_VALUES)
+    PINN_EVAL_NE_X           – FEM mesh elements in x (default: 16)
+    PINN_EVAL_NE_Y           – FEM mesh elements in y (default: 16)
+    PINN_EVAL_NE_Z           – FEM mesh elements in z (default: 8)
 """
 
 from __future__ import annotations
@@ -36,10 +36,10 @@ import numpy as np
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ONE_LAYER_DIR = REPO_ROOT / "one-layer-workflow"
+BASE_DIR = REPO_ROOT / "one-layer-workflow"
 FEA_DIR = REPO_ROOT / "fea-workflow" / "solver"
 
-for _path in (ONE_LAYER_DIR, FEA_DIR):
+for _path in (BASE_DIR, FEA_DIR):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
@@ -47,8 +47,9 @@ import fem_solver  # noqa: E402
 import model  # noqa: E402
 import pinn_config as config  # noqa: E402
 
+
 # ---------------------------------------------------------------------------
-# Helpers (mirrored from one_layer_experiment_utils.py to keep script standalone)
+# Helpers (copied exactly from one_layer_experiment_utils.py)
 # ---------------------------------------------------------------------------
 
 
@@ -87,8 +88,8 @@ def _adapt_state_dict(state: dict, target: dict) -> dict:
     return state
 
 
-def _load_pinn(device: torch.device) -> torch.nn.Module:
-    model_path = Path(os.getenv("PINN_MODEL_PATH") or ONE_LAYER_DIR / "pinn_model.pth")
+def _load_pinn(device: torch.device):
+    model_path = Path(os.getenv("PINN_MODEL_PATH") or BASE_DIR / "pinn_model.pth")
     if not model_path.exists():
         raise FileNotFoundError(f"PINN checkpoint not found: {model_path}")
     pinn = model.MultiLayerPINN().to(device)
@@ -129,9 +130,7 @@ def _make_points(x: np.ndarray, y: np.ndarray, z: np.ndarray, E: float, thicknes
     )
 
 
-def _predict_displacement(
-    pinn: torch.nn.Module, device: torch.device, pts: np.ndarray, batch_size: int = 32768
-) -> np.ndarray:
+def _predict_displacement(pinn, device: torch.device, pts: np.ndarray, batch_size: int = 32768) -> np.ndarray:
     out = []
     with torch.no_grad():
         for start in range(0, len(pts), batch_size):
@@ -211,7 +210,7 @@ def main() -> None:
             z_nodes = np.asarray(z_nodes)
             u_fem = np.asarray(u_fem)
 
-            # PINN predict (full volume)
+            # PINN predict (full volume at FEM nodes)
             xg, yg, zg = np.meshgrid(x_nodes, y_nodes, z_nodes, indexing="ij")
             pts = _make_points(xg.ravel(), yg.ravel(), zg.ravel(), E, thickness)
             u_pinn = _predict_displacement(pinn, device, pts).reshape(u_fem.shape)
@@ -237,7 +236,7 @@ def main() -> None:
 
     summary = {
         "model": "one-layer",
-        "model_path": str(os.getenv("PINN_MODEL_PATH") or ONE_LAYER_DIR / "pinn_model.pth"),
+        "model_path": str(os.getenv("PINN_MODEL_PATH") or BASE_DIR / "pinn_model.pth"),
         "device": str(device),
         "mesh": {"ne_x": ne_x, "ne_y": ne_y, "ne_z": ne_z},
         "e_values": e_values,
