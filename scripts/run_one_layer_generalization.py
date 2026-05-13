@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
 
 from one_layer_experiment_utils import (
     GRAPHS_DATA_DIR,
+    compliance_params,
+    config,
     ensure_output_dirs,
     evaluate_case_grid,
     load_pinn,
@@ -23,13 +26,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-path", default=None)
     parser.add_argument("--n-cases", type=int, default=8)
-    parser.add_argument("--seed", type=int, default=20260415)
+    parser.add_argument("--seed", type=int, default=20260428)
     parser.add_argument("--ne-x", type=int, default=16)
     parser.add_argument("--ne-y", type=int, default=16)
     parser.add_argument("--ne-z", type=int, default=8)
+    parser.add_argument("--calibration-json", default=os.getenv("PINN_CALIBRATION_JSON"))
     parser.add_argument("--out-csv", default=str(GRAPHS_DATA_DIR / "one_layer_random_generalization.csv"))
     parser.add_argument("--out-summary", default=str(GRAPHS_DATA_DIR / "one_layer_random_generalization_summary.json"))
     args = parser.parse_args()
+
+    if args.calibration_json:
+        os.environ["PINN_CALIBRATION_JSON"] = args.calibration_json
 
     ensure_output_dirs()
     device = select_device()
@@ -92,10 +99,15 @@ def main() -> None:
     vol_l2 = np.array([float(r["volume_relative_l2_pct"]) for r in rows], dtype=float)
     avg_disp = np.array([float(r["avg_displacement_relative_error_pct"]) for r in rows], dtype=float)
     summary = {
+        "sampling_protocol": "random_interior_parameter_generalization",
+        "calibration_json": args.calibration_json,
+        "compliance_params": compliance_params(),
         "model_path": str(model_path),
         "seed": int(args.seed),
         "n_cases": int(args.n_cases),
         "mesh": {"ne_x": args.ne_x, "ne_y": args.ne_y, "ne_z": args.ne_z},
+        "e_bounds": [float(v) for v in getattr(config, "E_RANGE", [1.0, 10.0])],
+        "thickness_bounds": [float(v) for v in getattr(config, "THICKNESS_RANGE", [0.05, 0.15])],
         "top_uz_mae_pct_mean": float(top.mean()) if len(top) else None,
         "top_uz_mae_pct_std": float(top.std(ddof=0)) if len(top) else None,
         "top_uz_mae_pct_worst": float(top.max()) if len(top) else None,

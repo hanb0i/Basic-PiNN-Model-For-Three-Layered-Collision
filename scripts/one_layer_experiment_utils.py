@@ -31,6 +31,8 @@ import fem_solver  # noqa: E402
 import model  # noqa: E402
 import pinn_config as config  # noqa: E402
 
+_CALIBRATION_CACHE: dict[str, dict | None] = {}
+
 
 @dataclass(frozen=True)
 class OneLayerCase:
@@ -89,12 +91,42 @@ def load_pinn(device: torch.device, model_path: str | os.PathLike | None = None)
     return pinn, model_path
 
 
+def _load_calibration() -> dict | None:
+    path = os.getenv("PINN_CALIBRATION_JSON")
+    if not path:
+        return None
+    if path not in _CALIBRATION_CACHE:
+        cal_path = Path(path)
+        if not cal_path.is_absolute():
+            cal_path = REPO_ROOT / cal_path
+        _CALIBRATION_CACHE[path] = json.loads(cal_path.read_text()) if cal_path.exists() else None
+    return _CALIBRATION_CACHE[path]
+
+
+def compliance_params() -> dict[str, float]:
+    scale = float(getattr(config, "DISPLACEMENT_COMPLIANCE_SCALE", 1.0))
+    e_pow = float(getattr(config, "E_COMPLIANCE_POWER", 1.0))
+    alpha = float(getattr(config, "THICKNESS_COMPLIANCE_ALPHA", 0.0))
+    cal = _load_calibration()
+    tuned = cal.get("tuned_params") if cal else None
+    if tuned:
+        scale = float(tuned.get("PINN_DISPLACEMENT_COMPLIANCE_SCALE", scale))
+        e_pow = float(tuned.get("PINN_E_COMPLIANCE_POWER", e_pow))
+        alpha = float(tuned.get("PINN_THICKNESS_COMPLIANCE_ALPHA", alpha))
+    return {
+        "PINN_DISPLACEMENT_COMPLIANCE_SCALE": scale,
+        "PINN_E_COMPLIANCE_POWER": e_pow,
+        "PINN_THICKNESS_COMPLIANCE_ALPHA": alpha,
+    }
+
+
 def u_from_v(v: np.ndarray, pts: np.ndarray) -> np.ndarray:
     e_vals = pts[:, 3:4]
     t_vals = pts[:, 4:5]
-    e_pow = float(getattr(config, "E_COMPLIANCE_POWER", 1.0))
-    alpha = float(getattr(config, "THICKNESS_COMPLIANCE_ALPHA", 0.0))
-    scale = float(getattr(config, "DISPLACEMENT_COMPLIANCE_SCALE", 1.0))
+    params = compliance_params()
+    scale = params["PINN_DISPLACEMENT_COMPLIANCE_SCALE"]
+    e_pow = params["PINN_E_COMPLIANCE_POWER"]
+    alpha = params["PINN_THICKNESS_COMPLIANCE_ALPHA"]
     h_ref = float(getattr(config, "H", 1.0))
     return scale * v / (e_vals**e_pow) * (h_ref / np.clip(t_vals, 1e-8, None)) ** alpha
 

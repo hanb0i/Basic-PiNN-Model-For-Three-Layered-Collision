@@ -234,7 +234,10 @@ def main() -> None:
     }
     write_json(Path(args.out), payload)
     print(f"Wrote {args.out}")
-    print(f"Holdout tuned top worst: {payload['holdout_metrics_tuned']['top_mae_pct_worst']:.2f}%")
+    if payload["holdout_metrics_tuned"]:
+        print(f"Holdout tuned top worst: {payload['holdout_metrics_tuned']['top_mae_pct_worst']:.2f}%")
+    else:
+        print("No holdout cases requested.")
 
 
 if __name__ == "__main__":

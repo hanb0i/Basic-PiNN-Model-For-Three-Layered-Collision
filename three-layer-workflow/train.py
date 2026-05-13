@@ -81,6 +81,7 @@ def train():
     print(pinn)
     if os.getenv("PINN_WARM_START", "1") == "1":
         ckpt_candidates = [
+            os.getenv("PINN_WARM_START_PATH", ""),
             _artifact_path("pinn_model.pth"),
             _artifact_path(os.path.join("checkpoints", "pinn_model_baseline_6p96.pth")),
             os.path.join(os.path.dirname(_artifact_dir()), "pinn_model.pth"),
@@ -88,7 +89,7 @@ def train():
             os.path.join("..", "pinn_model.pth"),
         ]
         for ckpt in ckpt_candidates:
-            if os.path.exists(ckpt):
+            if ckpt and os.path.exists(ckpt):
                 _load_compatible_state_dict(pinn, ckpt, device)
                 break
     if config.FORCE_SOFT_SIDE_BC_FROM_START:
