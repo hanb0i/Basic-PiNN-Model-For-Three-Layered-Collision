@@ -128,6 +128,188 @@ def load_fem_supervision_data(
 
     cache_enabled = os.getenv("PINN_SUPERVISION_CACHE", "1").strip().lower() in {"1", "true", "yes", "y", "on"}
     force_regen = os.getenv("PINN_REGEN_SUPERVISION", "0").strip().lower() in {"1", "true", "yes", "y", "on"}
+    random_case_count = int(os.getenv("PINN_RANDOM_SUPERVISION_CASES", "0"))
+
+    if random_case_count > 0:
+        total_target_points = int(getattr(config, "N_DATA_POINTS", 0))
+        if total_target_points <= 0:
+            raise ValueError("PINN_RANDOM_SUPERVISION_CASES requires PINN_N_DATA_POINTS > 0")
+
+        seed = int(os.getenv("PINN_RANDOM_SUPERVISION_SEED", "20260429"))
+        top_frac = float(os.getenv("PINN_SUPERVISION_TOP_FRACTION", "0.8"))
+        if_frac = float(os.getenv("PINN_SUPERVISION_INTERFACE_FRACTION", "0.1"))
+        top_frac = min(max(top_frac, 0.0), 1.0)
+        if_frac = min(max(if_frac, 0.0), 1.0 - top_frac)
+
+        rng_cases = np.random.default_rng(seed)
+        e_min, e_max = _get_e_range()
+        t1_min, t1_max = _get_t1_range()
+        t2_min, t2_max = _get_t2_range()
+        t3_min, t3_max = _get_t3_range()
+        random_cases = []
+        for _ in range(random_case_count):
+            vals = rng_cases.uniform(
+                [e_min, e_min, e_min, t1_min, t2_min, t3_min],
+                [e_max, e_max, e_max, t1_max, t2_max, t3_max],
+            )
+            random_cases.append(tuple(float(v) for v in vals))
+
+        base_count = total_target_points // random_case_count
+        extra = total_target_points % random_case_count
+        case_counts = [base_count + (1 if idx < extra else 0) for idx in range(random_case_count)]
+
+        meta = {
+            "mode": "random_interior_parameter_supervision",
+            "random_cases": random_cases,
+            "random_case_count": int(random_case_count),
+            "random_seed": int(seed),
+            "n_points_total": int(total_target_points),
+            "case_counts": case_counts,
+            "top_fraction": float(top_frac),
+            "interface_fraction": float(if_frac),
+            "ne_x": int(getattr(config, "FEM_NE_X", 30)),
+            "ne_y": int(getattr(config, "FEM_NE_Y", 30)),
+            "ne_z": int(getattr(config, "FEM_NE_Z", 10)),
+            "Lx": float(getattr(config, "Lx", 1.0)),
+            "Ly": float(getattr(config, "Ly", 1.0)),
+            "p0": float(getattr(config, "p0", 1.0)),
+            "load_patch": [list(getattr(config, "LOAD_PATCH_X", [0.0, 1.0])), list(getattr(config, "LOAD_PATCH_Y", [0.0, 1.0]))],
+            "nu": float(getattr(config, "nu_vals", [0.3])[0]),
+            "version": 1,
+        }
+        cache_key = hashlib.sha256(json.dumps(meta, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "supervision_cache")
+        cache_path = os.path.join(cache_dir, f"random_fem_supervision_{cache_key}.pt")
+
+        if cache_enabled and (not force_regen) and os.path.exists(cache_path):
+            blob = torch.load(cache_path, map_location="cpu")
+            x_data = blob["x"]
+            u_data = blob["u"]
+            print(f"  Loaded cached random FEM supervision: {cache_path} ({len(x_data)} points)")
+            return x_data, u_data
+
+        x_data_list = []
+        u_data_list = []
+        print(
+            f"  FEM supervision uses {random_case_count} random cases "
+            f"(seed={seed}, top_fraction={top_frac:.2f}, interface_fraction={if_frac:.2f})."
+        )
+
+        for idx, ((E1_val, E2_val, E3_val, t1, t2, t3), n_pick_target) in enumerate(zip(random_cases, case_counts)):
+            thickness = float(t1) + float(t2) + float(t3)
+            print(
+                f"  Generating random FEM supervision case {idx:03d}: "
+                f"E=[{E1_val:.6g},{E2_val:.6g},{E3_val:.6g}], "
+                f"t=[{t1:.6g},{t2:.6g},{t3:.6g}]..."
+            )
+            cfg = {
+                "geometry": {
+                    "Lx": config.Lx,
+                    "Ly": config.Ly,
+                    "H": thickness,
+                    "ne_x": int(getattr(config, "FEM_NE_X", 30)),
+                    "ne_y": int(getattr(config, "FEM_NE_Y", 30)),
+                    "ne_z": int(getattr(config, "FEM_NE_Z", 10)),
+                },
+                "material": {
+                    "E_layers": [float(E1_val), float(E2_val), float(E3_val)],
+                    "t_layers": [float(t1), float(t2), float(t3)],
+                    "nu": config.nu_vals[0],
+                },
+                "load_patch": {
+                    "pressure": config.p0,
+                    "x_start": config.LOAD_PATCH_X[0] / config.Lx,
+                    "x_end": config.LOAD_PATCH_X[1] / config.Lx,
+                    "y_start": config.LOAD_PATCH_Y[0] / config.Ly,
+                    "y_end": config.LOAD_PATCH_Y[1] / config.Ly,
+                },
+            }
+            x_nodes, y_nodes, z_nodes, u_grid = fem_solver.solve_three_layer_fem(cfg)
+
+            X, Y, Z = np.meshgrid(x_nodes, y_nodes, z_nodes, indexing="ij")
+            x_flat = X.flatten()
+            y_flat = Y.flatten()
+            z_flat = Z.flatten()
+            u_flat = u_grid.reshape(-1, 3)
+
+            nx, ny, nz = len(x_nodes), len(y_nodes), len(z_nodes)
+            total_points = int(nx * ny * nz)
+            n_pick = int(min(n_pick_target, total_points))
+
+            def _pool_for_k(k_idx: int) -> np.ndarray:
+                ii, jj = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
+                return (ii.ravel() * (ny * nz) + jj.ravel() * nz + int(k_idx)).astype(int)
+
+            k_top = nz - 1
+            k_if1 = int(np.argmin(np.abs(np.array(z_nodes, dtype=float) - float(t1))))
+            k_if2 = int(np.argmin(np.abs(np.array(z_nodes, dtype=float) - (float(t1) + float(t2)))))
+            top_pool = _pool_for_k(k_top)
+            if_pools = [_pool_for_k(k_if1)]
+            if k_if2 != k_if1 and k_if2 != k_top:
+                if_pools.append(_pool_for_k(k_if2))
+            interface_pool = np.unique(np.concatenate(if_pools, axis=0))
+
+            n_top = int(round(top_frac * n_pick))
+            n_if = int(round(if_frac * n_pick))
+            n_rest = max(0, n_pick - n_top - n_if)
+            seed_material = f"random,{seed},{idx},{n_pick}".encode("utf-8")
+            rng = np.random.default_rng(int(hashlib.sha256(seed_material).hexdigest()[:8], 16))
+            picked = []
+
+            def _pick_from_pool(pool: np.ndarray, n: int):
+                nonlocal picked
+                if n <= 0 or pool.size == 0:
+                    return
+                if n >= pool.size:
+                    picked.extend(pool.tolist())
+                else:
+                    picked.extend(rng.choice(pool, size=n, replace=False).tolist())
+
+            _pick_from_pool(top_pool, n_top)
+            _pick_from_pool(interface_pool, n_if)
+
+            picked = np.unique(np.array(picked, dtype=int))
+            if picked.size < n_pick:
+                remaining = np.setdiff1d(np.arange(total_points, dtype=int), picked, assume_unique=False)
+                if remaining.size > 0:
+                    extra_count = min(max(n_rest, n_pick - picked.size), remaining.size)
+                    extra = rng.choice(remaining, size=extra_count, replace=False)
+                    picked = np.unique(np.concatenate([picked, extra], axis=0))
+
+            indices = picked[:n_pick]
+            r_min, r_max = _get_restitution_range()
+            mu_min, mu_max = _get_friction_range()
+            v0_min, v0_max = _get_impact_velocity_range()
+            x_sampled = np.stack(
+                [
+                    x_flat[indices],
+                    y_flat[indices],
+                    z_flat[indices],
+                    np.ones(len(indices)) * float(E1_val),
+                    np.ones(len(indices)) * float(t1),
+                    np.ones(len(indices)) * float(E2_val),
+                    np.ones(len(indices)) * float(t2),
+                    np.ones(len(indices)) * float(E3_val),
+                    np.ones(len(indices)) * float(t3),
+                    np.ones(len(indices)) * (0.5 * (r_min + r_max)),
+                    np.ones(len(indices)) * (0.5 * (mu_min + mu_max)),
+                    np.ones(len(indices)) * (0.5 * (v0_min + v0_max)),
+                ],
+                axis=1,
+            )
+            x_data_list.append(torch.tensor(x_sampled, dtype=torch.float32))
+            u_data_list.append(torch.tensor(u_flat[indices], dtype=torch.float32))
+
+        x_data = torch.cat(x_data_list, dim=0)
+        u_data = torch.cat(u_data_list, dim=0)
+
+        if cache_enabled:
+            os.makedirs(cache_dir, exist_ok=True)
+            torch.save({"x": x_data.cpu(), "u": u_data.cpu(), "meta": meta}, cache_path)
+            print(f"  Saved random FEM supervision cache: {cache_path}")
+
+        print(f"  Loaded {len(x_data)} sparse random FEM supervision points")
+        return x_data, u_data
 
     if e_values is None:
         if hasattr(config, "DATA_E_VALUES"):

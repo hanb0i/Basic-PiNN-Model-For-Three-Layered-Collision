@@ -80,9 +80,8 @@ def train():
     pinn = model.MultiLayerPINN().to(device)
     print(pinn)
     if os.getenv("PINN_WARM_START", "1") == "1":
-        explicit_warm_start = os.getenv("PINN_WARM_START_PATH")
         ckpt_candidates = [
-            explicit_warm_start,
+            os.getenv("PINN_WARM_START_PATH", ""),
             _artifact_path("pinn_model.pth"),
             _artifact_path(os.path.join("checkpoints", "pinn_model_baseline_6p96.pth")),
             os.path.join(os.path.dirname(_artifact_dir()), "pinn_model.pth"),
