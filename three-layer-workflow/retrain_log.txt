@@ -1,0 +1,51 @@
+Using device: mps
+Using p0 = 1.0
+MultiLayerPINN(
+  (layer): LayerNet(
+    (net): Sequential(
+      (0): Linear(in_features=21, out_features=64, bias=True)
+      (1): Tanh()
+      (2): Linear(in_features=64, out_features=64, bias=True)
+      (3): Tanh()
+      (4): Linear(in_features=64, out_features=64, bias=True)
+      (5): Tanh()
+      (6): Linear(in_features=64, out_features=64, bias=True)
+      (7): Tanh()
+      (8): Linear(in_features=64, out_features=3, bias=True)
+    )
+  )
+)
+Loading FEM solution for comparison...
+FEM data loaded: (31, 31, 11)
+Loading hybrid supervision data (N=36000, E=[1.0, 10.0])...
+  Loaded cached FEM supervision: /Users/hanbosong/GitHub/Basic-PiNN-Model-For-Three-Layered-Collision/three-layer-workflow/supervision_cache/fem_supervision_34741efd821c827a.pt (36000 points)
+Attached 36000 supervision points to training data.
+Starting SOAP Pretraining...
+Epoch 0: Total Loss: 178402.734375 | PDE: 5742.918945 | BC_sides: 0.000790 | Free_top: 12.800464 | Free_bot: 15.289249 | Load: 12.469785 | Energy: 0.639845 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 19.140564 | ImpactInv: 0.000000 | LR: 1.00e-03 | FEM MAE: 0.335317 | Time: 1.3048s
+Epoch 100: Total Loss: 417.088196 | PDE: 6.174025 | BC_sides: 0.000909 | Free_top: 0.157376 | Free_bot: 0.141943 | Load: 0.193397 | Energy: 0.000274 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.025687 | ImpactInv: 0.000000 | LR: 1.00e-03 | FEM MAE: 0.313517 | Time: 26.4600s
+Epoch 200: Total Loss: 216.367996 | PDE: 0.190497 | BC_sides: 0.001622 | Free_top: 0.032747 | Free_bot: 0.040899 | Load: 0.141390 | Energy: -0.003079 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.002094 | ImpactInv: 0.000000 | LR: 1.00e-03 | FEM MAE: 0.295603 | Time: 25.6771s
+Epoch 300: Total Loss: 201.325272 | PDE: 0.047226 | BC_sides: 0.001874 | Free_top: 0.028896 | Free_bot: 0.023271 | Load: 0.112674 | Energy: -0.003704 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000589 | ImpactInv: 0.000000 | LR: 1.00e-03 | FEM MAE: 0.289324 | Time: 26.0600s
+Epoch 400: Total Loss: 180.983002 | PDE: 0.070694 | BC_sides: 0.001566 | Free_top: 0.052735 | Free_bot: 0.020869 | Load: 0.093223 | Energy: -0.003506 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.001778 | ImpactInv: 0.000000 | LR: 3.00e-04 | FEM MAE: 0.273077 | Time: 26.5516s
+  Resampled with residual-based adaptive sampling at epoch 500
+Epoch 500: Total Loss: 17.881712 | PDE: 0.518460 | BC_sides: 0.002591 | Free_top: 0.261090 | Free_bot: 0.970376 | Load: 0.111545 | Energy: -0.003515 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.003029 | ImpactInv: 0.000000 | LR: 3.00e-04 | FEM MAE: 0.256478 | Time: 26.3684s
+Epoch 600: Total Loss: 1.726151 | PDE: 0.029727 | BC_sides: 0.002269 | Free_top: 0.058418 | Free_bot: 0.067642 | Load: 0.094302 | Energy: -0.003755 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000918 | ImpactInv: 0.000000 | LR: 3.00e-04 | FEM MAE: 0.257050 | Time: 25.7791s
+Epoch 700: Total Loss: 0.756375 | PDE: 0.006870 | BC_sides: 0.002126 | Free_top: 0.029075 | Free_bot: 0.029339 | Load: 0.083103 | Energy: -0.003516 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000315 | ImpactInv: 0.000000 | LR: 3.00e-04 | FEM MAE: 0.255121 | Time: 27.0993s
+Epoch 800: Total Loss: 0.523310 | PDE: 0.002964 | BC_sides: 0.001969 | Free_top: 0.029705 | Free_bot: 0.021687 | Load: 0.069433 | Energy: -0.003189 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000173 | ImpactInv: 0.000000 | LR: 9.00e-05 | FEM MAE: 0.251865 | Time: 29.6297s
+Epoch 900: Total Loss: 0.469283 | PDE: 0.002319 | BC_sides: 0.001869 | Free_top: 0.031843 | Free_bot: 0.023762 | Load: 0.064064 | Energy: -0.002983 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000137 | ImpactInv: 0.000000 | LR: 9.00e-05 | FEM MAE: 0.250100 | Time: 26.7973s
+  Resampled with residual-based adaptive sampling at epoch 1000
+Epoch 1000: Total Loss: 0.876241 | PDE: 0.015327 | BC_sides: 0.002991 | Free_top: 0.039378 | Free_bot: 0.039554 | Load: 0.063203 | Energy: -0.002549 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000149 | ImpactInv: 0.000000 | LR: 9.00e-05 | FEM MAE: 0.248092 | Time: 27.0328s
+Epoch 1100: Total Loss: 0.487511 | PDE: 0.002704 | BC_sides: 0.002797 | Free_top: 0.038774 | Free_bot: 0.032462 | Load: 0.063636 | Energy: -0.002471 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000127 | ImpactInv: 0.000000 | LR: 9.00e-05 | FEM MAE: 0.247266 | Time: 26.5832s
+Epoch 1200: Total Loss: 0.439031 | PDE: 0.001808 | BC_sides: 0.002528 | Free_top: 0.039234 | Free_bot: 0.031809 | Load: 0.060941 | Energy: -0.002240 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000100 | ImpactInv: 0.000000 | LR: 2.70e-05 | FEM MAE: 0.246106 | Time: 26.5988s
+Epoch 1300: Total Loss: 0.426392 | PDE: 0.001681 | BC_sides: 0.002401 | Free_top: 0.039593 | Free_bot: 0.032425 | Load: 0.059391 | Energy: -0.002133 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000094 | ImpactInv: 0.000000 | LR: 2.70e-05 | FEM MAE: 0.245501 | Time: 26.6047s
+Epoch 1400: Total Loss: 0.414897 | PDE: 0.001579 | BC_sides: 0.002255 | Free_top: 0.039829 | Free_bot: 0.033052 | Load: 0.057849 | Energy: -0.002019 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000090 | ImpactInv: 0.000000 | LR: 2.70e-05 | FEM MAE: 0.244742 | Time: 27.2191s
+  Resampled with residual-based adaptive sampling at epoch 1500
+Epoch 1500: Total Loss: 0.574355 | PDE: 0.006482 | BC_sides: 0.003806 | Free_top: 0.043655 | Free_bot: 0.037558 | Load: 0.058118 | Energy: -0.001893 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000103 | ImpactInv: 0.000000 | LR: 2.70e-05 | FEM MAE: 0.243960 | Time: 28.5308s
+Epoch 1600: Total Loss: 0.454784 | PDE: 0.002524 | BC_sides: 0.003760 | Free_top: 0.044572 | Free_bot: 0.039196 | Load: 0.058175 | Energy: -0.001855 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000094 | ImpactInv: 0.000000 | LR: 8.10e-06 | FEM MAE: 0.243818 | Time: 27.8298s
+Epoch 1700: Total Loss: 0.445160 | PDE: 0.002220 | BC_sides: 0.003655 | Free_top: 0.043664 | Free_bot: 0.038092 | Load: 0.058402 | Energy: -0.001839 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000093 | ImpactInv: 0.000000 | LR: 8.10e-06 | FEM MAE: 0.243567 | Time: 27.4848s
+Epoch 1800: Total Loss: 0.438220 | PDE: 0.002036 | BC_sides: 0.003521 | Free_top: 0.043277 | Free_bot: 0.037518 | Load: 0.058370 | Energy: -0.001806 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000091 | ImpactInv: 0.000000 | LR: 8.10e-06 | FEM MAE: 0.243210 | Time: 28.4065s
+Epoch 1900: Total Loss: 0.432568 | PDE: 0.001901 | BC_sides: 0.003386 | Free_top: 0.042992 | Free_bot: 0.037102 | Load: 0.058247 | Energy: -0.001772 | ImpactC: 0.000000 | FricC: 0.000000 | FricS: 0.000000 | Interface: 0.000090 | ImpactInv: 0.000000 | LR: 8.10e-06 | FEM MAE: 0.242840 | Time: 27.4930s
+SOAP Pretraining Complete. Total Time: 541.62s
+Starting L-BFGS Fine-Tuning...
+Running 0 L-BFGS outer steps.
+Using fixed collocation set during L-BFGS for stability.
+Model saved to /Users/hanbosong/GitHub/Basic-PiNN-Model-For-Three-Layered-Collision/three-layer-workflow/pinn_model.pth

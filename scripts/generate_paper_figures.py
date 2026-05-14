@@ -16,7 +16,15 @@ import torch
 REPO = Path(__file__).resolve().parents[1]
 FEA_DIR = REPO / "fea-workflow" / "solver"
 sys.path.insert(0, str(FEA_DIR))
+sys.path.insert(0, str(REPO / "scripts"))
 import fem_solver
+from three_layer_experiment_utils import (
+    ThreeLayerCase,
+    load_pinn as _load_pinn_utils,
+    make_points,
+    predict_displacement,
+    solve_fem_case,
+)
 
 Lx, Ly, p0, nu = 1.0, 1.0, 1.0, 0.3
 NE = (16, 16, 8)
@@ -28,31 +36,19 @@ plt.rcParams.update({"font.family": "serif", "font.size": 11,
 CMAP_F, CMAP_E = "jet", "magma"
 IF_LW, IF_COL = 3.5, "white"
 
-# ── Load three-layer PINN + config ──────────────────────────────────────────
-def load_3l():
-    d = REPO / "three-layer-workflow"; sys.path.insert(0, str(d))
-    import importlib
-    cfg = importlib.import_module("pinn_config"); mdl = importlib.import_module("model")
-    p = mdl.MultiLayerPINN()
-    sd = torch.load(d/"pinn_model.pth", map_location="cpu", weights_only=True)
-    sd = mdl.adapt_legacy_state_dict(sd, p.state_dict())
-    p.load_state_dict(sd, strict=False); p.eval()
-    cfg.USE_HARD_SIDE_BC = False
-    return p, cfg
+# ── Load three-layer PINN ────────────────────────────────────────────────────
+def load_3l(model_path=None):
+    """Load the 3-layer PINN via the canonical utils pipeline (includes calibration)."""
+    device = torch.device("cpu")
+    path = Path(model_path) if model_path else REPO / "three-layer-workflow" / "pinn_model_final.pth"
+    pinn, _ = _load_pinn_utils(device, path)
+    return pinn, device
 
-def predict_3l(pinn, cfg, xf, yf, zf, e1, e2, e3, t1, t2, t3):
-    r = float(getattr(cfg,"RESTITUTION_REF",0.5))
-    mu = float(getattr(cfg,"FRICTION_REF",0.3))
-    v0 = float(getattr(cfg,"IMPACT_VELOCITY_REF",1.0))
-    pts = np.stack([xf,yf,zf]+[np.full_like(xf,v) for v in [e1,t1,e2,t2,e3,t3,r,mu,v0]], axis=1)
-    with torch.no_grad():
-        v = pinn(torch.tensor(pts, dtype=torch.float32)).cpu().numpy()
-    es = (pts[:,3:4]+pts[:,5:6]+pts[:,7:8])/3; ts = pts[:,4:5]+pts[:,6:7]+pts[:,8:9]
-    ep = float(getattr(cfg,"E_COMPLIANCE_POWER",1.0))
-    al = float(getattr(cfg,"THICKNESS_COMPLIANCE_ALPHA",0.0))
-    sc = float(getattr(cfg,"DISPLACEMENT_COMPLIANCE_SCALE",1.0))
-    hr = float(getattr(cfg,"H",0.1))
-    return sc * v / (es**ep) * (hr/np.clip(ts,1e-8,None))**al
+def predict_3l(pinn, device, xf, yf, zf, e1, e2, e3, t1, t2, t3):
+    """Predict displacements using the canonical pipeline (compliance + calibration)."""
+    case = ThreeLayerCase("fig", e1, e2, e3, t1, t2, t3)
+    pts = make_points(xf, yf, zf, case)
+    return predict_displacement(pinn, device, pts)
 
 # ── Load one-layer PINN + config ────────────────────────────────────────────
 def load_1l():
@@ -162,18 +158,20 @@ def main():
     H3 = t1+t2+t3; ifs3 = [t1, t1+t2]
     E1l, H1l = 1.0, 0.10
 
-    # Three-layer
-    pinn3, cfg3 = load_3l()
-    print("Running 3L FEM..."); xn3,yn3,zn3,u3 = fem_3l(e1,e2,e3,t1,t2,t3)
+    # Three-layer — use canonical pipeline (compliance + calibration)
+    pinn3, device3 = load_3l()
+    case3 = ThreeLayerCase("fig3l", e1, e2, e3, t1, t2, t3)
+    print("Running 3L FEM...")
+    xn3, yn3, zn3, u3, _ = solve_fem_case(case3, *NE)
     xn3,yn3,zn3,u3 = [np.array(a,dtype=float) for a in [xn3,yn3,zn3,u3]]
     xg3,yg3 = np.meshgrid(xn3,yn3,indexing="ij")
     uz_fea_top3 = u3[:,:,-1,2]
-    uz_pinn_top3 = predict_3l(pinn3,cfg3,xg3.ravel(),yg3.ravel(),
+    uz_pinn_top3 = predict_3l(pinn3,device3,xg3.ravel(),yg3.ravel(),
         np.full(xg3.size,H3),e1,e2,e3,t1,t2,t3).reshape(len(xn3),len(yn3),3)[:,:,2]
     mi = len(yn3)//2
     xc3,zc3 = np.meshgrid(xn3,zn3,indexing="ij")
     uz_fea_cs3 = u3[:,mi,:,2]
-    uz_pinn_cs3 = predict_3l(pinn3,cfg3,xc3.ravel(),np.full(xc3.size,yn3[mi]),
+    uz_pinn_cs3 = predict_3l(pinn3,device3,xc3.ravel(),np.full(xc3.size,yn3[mi]),
         zc3.ravel(),e1,e2,e3,t1,t2,t3).reshape(len(xn3),len(zn3),3)[:,:,2]
 
     # One-layer

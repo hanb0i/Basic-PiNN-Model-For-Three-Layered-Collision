@@ -1,0 +1,44 @@
+{
+  "sampling_protocol": "random_interior_parameter_generalization",
+  "calibration_json": null,
+  "model_path": "/Users/hanbosong/GitHub/Basic-PiNN-Model-For-Three-Layered-Collision/graphs/data/random_supervision_runs/three_layer_final_supervised/pinn_model.pth",
+  "seed": 20260430,
+  "n_cases": 100,
+  "mesh": {
+    "ne_x": 16,
+    "ne_y": 16,
+    "ne_z": 8
+  },
+  "e_bounds": [
+    1.0,
+    10.0
+  ],
+  "t1_bounds": [
+    0.02,
+    0.1
+  ],
+  "t2_bounds": [
+    0.02,
+    0.1
+  ],
+  "t3_bounds": [
+    0.02,
+    0.1
+  ],
+  "top_uz_mae_pct_mean": 5.73647136,
+  "top_uz_mae_pct_std": 1.0577627409144787,
+  "top_uz_mae_pct_worst": 10.807323,
+  "top_uz_relative_l2_pct_mean": 22.518292989999996,
+  "top_uz_relative_l2_pct_std": 4.658229498489861,
+  "top_uz_relative_l2_pct_worst": 44.601313,
+  "volume_mae_pct_mean": 2.52979989,
+  "volume_mae_pct_std": 0.3986908097715546,
+  "volume_mae_pct_worst": 4.656151,
+  "volume_relative_l2_pct_mean": 23.194943580000004,
+  "volume_relative_l2_pct_std": 4.419680542488385,
+  "volume_relative_l2_pct_worst": 45.130235,
+  "avg_displacement_relative_error_pct_mean": 26.73881717,
+  "avg_displacement_relative_error_pct_worst": 50.07795,
+  "all_top_cases_below_5_pct": false,
+  "all_volume_cases_below_5_pct": true
+}
