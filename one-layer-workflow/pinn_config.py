@@ -84,7 +84,7 @@ EPOCHS_LBFGS = 0
 SOAP_PRECONDITION_FREQUENCY = 10 # Lower = more frequent curvature updates; higher = cheaper but less responsive
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
 WEIGHTS = {
-    'pde': 5.0,    # Reverted to 5.0 (Optimal: 0.4% Error at E=1, 10% at E=10)
+    'pde': 10.0,
     'bc': 0.7,      # Slightly softer sides so load can gather more budget
     'load': 5.0, # Optimal load weight
     'energy': 0.63, # Per user request
@@ -92,8 +92,8 @@ WEIGHTS = {
     'impact_contact': 0.0002,   # Reduced to preserve FEA parity in no-supervision mode
     'friction_coulomb': 0.001,  # Reduced to preserve FEA parity in no-supervision mode
     'friction_stick': 0.0005,   # Reduced to preserve FEA parity in no-supervision mode
-    'interface_u': 1.0,
-    'data': 1.0
+    'interface_u': 300.0,
+    'data': 400.0
 }
 
 # Loss weight ramp: load-first to raise displacement while preserving shape.

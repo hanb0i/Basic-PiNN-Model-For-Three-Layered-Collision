@@ -92,8 +92,8 @@ INTERFACE_FEATURE_BETA = 20.0
 
 # --- Training Hyperparameters ---
 LEARNING_RATE = 1e-3
-EPOCHS_ADAM = 400
-EPOCHS_LBFGS = 0
+EPOCHS_ADAM = 2000
+EPOCHS_LBFGS = 100
 # SOAP optimizer
 SOAP_PRECONDITION_FREQUENCY = 10 # Lower = more frequent curvature updates; higher = cheaper but less responsive
 #Plot Physical Residuals Every N Epochs every 100 epochs. 
