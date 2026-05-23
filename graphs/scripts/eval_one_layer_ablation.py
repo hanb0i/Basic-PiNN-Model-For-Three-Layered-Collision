@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""One-layer PINN ablation via grid-sweep MAE% with different compliance settings."""
+"""Paper-facing one-layer PINN ablation via grid-sweep MAE%.
+
+The trained one-layer network predicts a scaled displacement variable ``v``.
+The vanilla physical map is therefore ``u = v / E``.  Compliance-aware scaling
+is an additional inference-time correction on top of that map, not a
+replacement for it.
+
+This script intentionally reports only the paper ablation rows:
+
+* Full framework: full checkpoint with the compliance-aware scaling used for
+  this grid protocol.
+* - Compliance-aware scaling: same full checkpoint decoded with vanilla u=v/E.
+* Vanilla PINN: separately trained vanilla baseline checkpoint.
+"""
 
 from __future__ import annotations
 
@@ -54,6 +67,18 @@ def _load_pinn(ckpt_path: Path, device: torch.device):
 def _u_from_v(v, E_val, thickness, e_pow, alpha, scale):
     t_scale = 1.0 if alpha == 0.0 else (float(config.H) / max(1e-8, float(thickness))) ** alpha
     return (scale * v / (float(E_val) ** e_pow)) * t_scale
+
+
+def _find_vanilla_checkpoint() -> Path:
+    candidates = [
+        DATA_DIR / "external_baselines" / "one_layer_vanilla_pinn" / "pinn_model.pth",
+        DATA_DIR / "external_baselines" / "vanilla_param_pinn" / "pinn_model.pth",
+        DATA_DIR / "one_layer_ablation_400_from_scratch" / "vanilla_parameterized_pinn" / "pinn_model.pth",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return ONE_LAYER_DIR / "pinn_model.pth"
 
 
 def _run_fea(E_val, thickness):
@@ -132,34 +157,66 @@ def _grid_sweep(pinn, device, e_pow, alpha, scale):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     ckpt_path = ONE_LAYER_DIR / "pinn_model.pth"
+    vanilla_ckpt_path = _find_vanilla_checkpoint()
 
-    pinn = _load_pinn(ckpt_path, device)
     print(f"Loaded model: {ckpt_path}")
+    if vanilla_ckpt_path != ckpt_path:
+        print(f"Loaded vanilla baseline model: {vanilla_ckpt_path}")
+    else:
+        print("No separate vanilla checkpoint found; Vanilla PINN will reuse the full checkpoint.")
     print(f"Device: {device}")
 
-    # Ablation variants
+    # Reverse-ablation variants for the paper table.  Removing compliance-aware
+    # scaling leaves the vanilla PINN map u=v/E; it does not remove the required
+    # E normalization.
     variants = [
-        ("Pure-physics baseline", 0.0, 0.0, 1.0),
-        ("+ Compliance-aware scaling", 0.973, 1.234, 1.0),
-        ("+ Tuned compliance-aware scaling", 0.9743937316337181, 0.5784595573516915, 0.7360429019668411),
+        ("Full framework", ckpt_path, 0.973, 1.234, 1.0, "none"),
+        ("- Compliance-aware scaling", ckpt_path, 1.0, 0.0, 1.0, "compliance_aware_scaling"),
+        ("Vanilla PINN", vanilla_ckpt_path, 1.0, 0.0, 1.0, "baseline"),
     ]
 
     rows = []
-    for name, e_pow, alpha, scale in variants:
+    loaded: dict[Path, torch.nn.Module] = {}
+    for name, variant_ckpt, e_pow, alpha, scale, removed_component in variants:
+        if variant_ckpt not in loaded:
+            loaded[variant_ckpt] = _load_pinn(variant_ckpt, device)
+        pinn = loaded[variant_ckpt]
         print(f"\n=== {name} (e_pow={e_pow:.4f}, alpha={alpha:.4f}, scale={scale:.4f}) ===")
+        print(f"  Checkpoint: {variant_ckpt}")
         mean_mae, worst_mae = _grid_sweep(pinn, device, e_pow, alpha, scale)
         print(f"  Mean MAE: {mean_mae:.2f}%")
         print(f"  Worst MAE: {worst_mae:.2f}%")
-        rows.append({"variant": name, "mean_mae": f"{mean_mae:.4f}", "worst_mae": f"{worst_mae:.4f}"})
+        rows.append({
+            "variant": name,
+            "removed_component": removed_component,
+            "e_compliance_power": f"{e_pow:.8g}",
+            "thickness_compliance_alpha": f"{alpha:.8g}",
+            "displacement_compliance_scale": f"{scale:.8g}",
+            "mean_mae": f"{mean_mae:.4f}",
+            "worst_mae": f"{worst_mae:.4f}",
+            "checkpoint": str(variant_ckpt),
+        })
 
-    out_csv = DATA_DIR / "one_layer_ablation_grid_sweep.csv"
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["variant", "mean_mae", "worst_mae"])
-        writer.writeheader()
-        writer.writerows(rows)
-
-    print(f"\nWrote results to {out_csv}")
+    fieldnames = [
+        "variant",
+        "removed_component",
+        "e_compliance_power",
+        "thickness_compliance_alpha",
+        "displacement_compliance_scale",
+        "mean_mae",
+        "worst_mae",
+        "checkpoint",
+    ]
+    for out_csv in (
+        DATA_DIR / "one_layer_paper_ablation.csv",
+        DATA_DIR / "one_layer_ablation_grid_sweep.csv",
+    ):
+        out_csv.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_csv, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"\nWrote results to {out_csv}")
 
 
 if __name__ == "__main__":
