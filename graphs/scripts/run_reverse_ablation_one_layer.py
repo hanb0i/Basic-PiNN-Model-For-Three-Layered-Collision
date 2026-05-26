@@ -75,7 +75,9 @@ def main() -> None:
     if args.device:
         base_env["PINN_DEVICE"] = args.device
 
-    # Full one-layer framework config
+    # Full one-layer framework config.  The vanilla PINN still uses u=v/E;
+    # compliance-aware scaling only refers to the extra nonunit E exponent and
+    # thickness correction.
     full_overrides = {
         "PINN_E_COMPLIANCE_POWER": "0.973",
         "PINN_THICKNESS_COMPLIANCE_ALPHA": "1.234",
@@ -92,10 +94,16 @@ def main() -> None:
         return env
 
     variants: list[tuple[str, dict[str, str]]] = [
+        ("Vanilla PINN", without(
+            PINN_E_COMPLIANCE_POWER="1",
+            PINN_THICKNESS_COMPLIANCE_ALPHA="0",
+            PINN_DISPLACEMENT_COMPLIANCE_SCALE="1",
+        )),
         ("Full framework", full_overrides),
         ("Full framework without compliance-aware scaling", without(
-            PINN_E_COMPLIANCE_POWER="0",
+            PINN_E_COMPLIANCE_POWER="1",
             PINN_THICKNESS_COMPLIANCE_ALPHA="0",
+            PINN_DISPLACEMENT_COMPLIANCE_SCALE="1",
         )),
         ("Full framework without FEM supervision", without(
             PINN_USE_SUPERVISION_DATA="0",
@@ -159,7 +167,12 @@ def main() -> None:
         print(f"  mean MAE (%):  {mean_mae:.2f}")
         print(f"  worst MAE (%): {worst_mae:.2f}")
 
-        removed = "none" if variant_name == "Full framework" else variant_name.replace("Full framework without ", "")
+        if variant_name == "Full framework":
+            removed = "none"
+        elif variant_name == "Vanilla PINN":
+            removed = "baseline"
+        else:
+            removed = variant_name.replace("Full framework without ", "")
         rows.append({
             "variant": variant_name,
             "removed_component": removed,

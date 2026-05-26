@@ -69,6 +69,8 @@ def main() -> None:
         base_env["PINN_EPOCHS_ADAM"] = str(args.epochs_soap)
         base_env["PINN_EPOCHS_SOAP"] = str(args.epochs_soap)
 
+    # The network is trained to output v, with vanilla physical decoding u=v/E.
+    # Compliance-aware scaling is the extra nonunit E exponent / thickness map.
     full_overrides = {
         "PINN_E_COMPLIANCE_POWER": "0.973",
         "PINN_THICKNESS_COMPLIANCE_ALPHA": "1.234",
@@ -79,6 +81,15 @@ def main() -> None:
     }
 
     variants = [
+        (
+            "Vanilla one-layer PINN",
+            {
+                **full_overrides,
+                "PINN_DISPLACEMENT_COMPLIANCE_SCALE": "1",
+                "PINN_E_COMPLIANCE_POWER": "1",
+                "PINN_THICKNESS_COMPLIANCE_ALPHA": "0",
+            },
+        ),
         ("Full one-layer model", full_overrides),
         ("Full one-layer model without adaptive sampling", {**full_overrides, "PINN_ADAPTIVE_RESAMPLE_EVERY": "0"}),
         ("Full one-layer model without Fourier features", {**full_overrides, "PINN_FOURIER_DIM": "0"}),
@@ -122,9 +133,9 @@ def main() -> None:
             status = "evaluated_existing_checkpoint"
         elif args.skip_train and not ckpt_path.exists():
             shared_ckpt = ONE_LAYER_DIR / "pinn_model.pth"
-            if name == "Full one-layer model" and shared_ckpt.exists():
+            if name in {"Full one-layer model", "Vanilla one-layer PINN"} and shared_ckpt.exists():
                 eval_ckpt_path = shared_ckpt
-                status = "evaluated_shared_full_checkpoint"
+                status = "evaluated_shared_checkpoint"
             else:
                 rows.append(
                     {
