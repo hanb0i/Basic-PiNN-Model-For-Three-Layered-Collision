@@ -103,7 +103,7 @@ ax2.text(0, -6, r"$\boldsymbol{\mu} = \{E_1, t_1, E_2, t_2, E_3, t_3\}$",
 # Constructing the LaTeX-integrated legend string
 legend_text = (
     r"$\mathbf{Material\ Parameters:}$ $E_i$: Young modulus $\bullet$ $\nu = 0.3$ (Poisson ratio)    $|$    "
-    r"$\mathbf{Parameter\ Ranges:}$ $E_i \in [1.0, 10.0]$ $\bullet$ $t_i \in [0.02, 0.10]$"
+    r"$\mathbf{Parameter\ Ranges:}$ $E_i \in [1.0, 10.0]$ $\bullet$ $t_i \in [0.05, 0.15]$ (one-layer) / $[0.02, 0.10]$ (three-layer)"
 )
 
 fig.text(0.5, 0.05, legend_text,
