@@ -81,6 +81,13 @@ def _find_vanilla_checkpoint() -> Path:
     return ONE_LAYER_DIR / "pinn_model.pth"
 
 
+def _repo_relative(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        return str(path)
+
+
 def _run_fea(E_val, thickness):
     cfg = {
         "geometry": {"Lx": config.Lx, "Ly": config.Ly, "H": thickness},
@@ -194,7 +201,7 @@ def main():
             "displacement_compliance_scale": f"{scale:.8g}",
             "mean_mae": f"{mean_mae:.4f}",
             "worst_mae": f"{worst_mae:.4f}",
-            "checkpoint": str(variant_ckpt),
+            "checkpoint": _repo_relative(variant_ckpt),
         })
 
     fieldnames = [

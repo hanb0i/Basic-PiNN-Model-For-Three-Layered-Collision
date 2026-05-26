@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite the associated paper."
+title: "Optimizing Parameterized Physics-Informed Neural Networks to Solve Multilayered Static Linear Elastic PDEs"
+authors:
+  - family-names: "Song"
+    given-names: "Hanbo"
+  - family-names: "Lim"
+    given-names: "Joseph"
+  - family-names: "Zhang"
+    given-names: "Zhen"
+repository-code: "https://github.com/hanb0i/Optimizing-Parameterized-PINNs-to-Efficiently-Solve-Multilayered-Static-Linear-Elastic-PDEs"
+version: "1.0.0"
+date-released: "2026-05-23"

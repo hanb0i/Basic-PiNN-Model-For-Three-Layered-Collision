@@ -1,0 +1,7 @@
+variant,removed_component,mean_mae,worst_mae,source_note
+Full framework,none,5.74,10.81,Manuscript Table: Ablation study of the three-layer model
+Vanilla PINN baseline,baseline,58.59,277.37,Manuscript Table: Ablation study of the three-layer model
+- Compliance-aware scaling,compliance_aware_scaling,14.86,19.00,Manuscript Table: Ablation study of the three-layer model
+- Layerwise PDE decomposition,layerwise_pde_decomposition,5.47,9.63,Manuscript Table: Ablation study of the three-layer model
+- Interface continuity,interface_continuity,5.46,9.57,Manuscript Table: Ablation study of the three-layer model
+- Sparse FEM supervision,sparse_fem_supervision,10.93,16.12,Manuscript Table: Ablation study of the three-layer model

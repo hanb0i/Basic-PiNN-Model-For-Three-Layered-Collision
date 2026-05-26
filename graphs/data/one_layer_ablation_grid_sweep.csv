@@ -1,0 +1,4 @@
+variant,removed_component,e_compliance_power,thickness_compliance_alpha,displacement_compliance_scale,mean_mae,worst_mae,checkpoint
+Full framework,none,0.973,1.234,1,1.6187,3.1526,one-layer-workflow/pinn_model.pth
+- Compliance-aware scaling,compliance_aware_scaling,1,0,1,10.7571,17.7251,one-layer-workflow/pinn_model.pth
+Vanilla PINN,baseline,1,0,1,22.1731,24.0146,graphs/data/one_layer_ablation_400_from_scratch/vanilla_parameterized_pinn/pinn_model.pth
