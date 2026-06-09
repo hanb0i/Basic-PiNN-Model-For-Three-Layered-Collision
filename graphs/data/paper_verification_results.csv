@@ -1,3 +1,3 @@
 configuration,mean_mae,worst_mae,source_artifact,source_note
-One-layer,1.62,3.15,graphs/data/one_layer_paper_ablation.csv,Same values as the full-framework row in the paper one-layer ablation.
-Three-layer,5.74,10.81,graphs/data/three_layer_final_supervised_random100_summary.json,Top-surface MAE over 100 random interior parameter cases using three-layer-workflow/pinn_model_final.pth.
+One-layer,1.56,2.87,graphs/data/one_layer_random_generalization_summary.json,Volume MAE over 100 random interior parameter cases using one-layer-workflow/pinn_model.pth.
+Three-layer,2.53,4.66,graphs/data/three_layer_final_supervised_random100_summary.json,Volume MAE over 100 random interior parameter cases using three-layer-workflow/pinn_model_final.pth.

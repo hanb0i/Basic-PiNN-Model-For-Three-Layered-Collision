@@ -100,8 +100,8 @@ def check_three_layer_final_supervised() -> None:
 def check_verification_table() -> None:
     rows = _csv_rows(DATA / "paper_verification_results.csv")
     expected = {
-        "One-layer": (1.62, 3.15),
-        "Three-layer": (5.74, 10.81),
+        "One-layer": (1.56, 2.87),
+        "Three-layer": (2.53, 4.66),
     }
     for config, (mean, worst) in expected.items():
         row = next((r for r in rows if r.get("configuration") == config), None)
