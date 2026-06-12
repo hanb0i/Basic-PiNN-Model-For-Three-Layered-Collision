@@ -214,7 +214,7 @@ EVAL_E_VALUES = [1.0, 10.0]
 EVAL_T1_VALUES = [0.02, 0.10]
 EVAL_T2_VALUES = [0.02, 0.10]
 EVAL_T3_VALUES = [0.02, 0.10]
-USE_SUPERVISION_DATA = True
+USE_SUPERVISION_DATA = _env_flag("PINN_USE_SUPERVISION_DATA", True)
 
 # Default supervision allocation bias toward thin stacks (overridable via env).
 SUPERVISION_THICKNESS_POWER = 3.0

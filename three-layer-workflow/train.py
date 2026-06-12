@@ -61,6 +61,10 @@ def get_loss_weights(epoch, use_hard_bc=True):
     return weights
 
 def train():
+    seed = int(os.getenv("PINN_SEED", "20260430"))
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
     requested_device = os.getenv("PINN_DEVICE")
     if requested_device:
         device = torch.device(requested_device)
