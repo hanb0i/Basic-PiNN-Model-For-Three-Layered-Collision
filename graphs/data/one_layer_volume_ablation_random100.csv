@@ -1,0 +1,4 @@
+variant,mean_volume_mae_pct,worst_volume_mae_pct,seed,n_cases,mesh,checkpoint
+Full framework,1.5634,2.8682,20260430,100,16x16x8,one-layer-workflow/pinn_model.pth
+- Compliance-aware scaling,2.8911,6.1445,20260430,100,16x16x8,one-layer-workflow/pinn_model.pth
+Vanilla PINN baseline,8.3078,9.6249,20260430,100,16x16x8,graphs/data/one_layer_ablation_400_from_scratch/vanilla_parameterized_pinn/pinn_model.pth
